@@ -33,6 +33,9 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
             return;
         }
         saveDefaultConfig();
+        // The format, written for an AI agent to read. Replaced on every start,
+        // so it always describes the version that is running.
+        saveResource("AI-GUIDE.md", true);
         File dialogs = new File(getDataFolder(), "dialogs");
         if (!dialogs.exists()) {
             for (String name : EXAMPLES) saveResource("dialogs/examples/" + name, false);

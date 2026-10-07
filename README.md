@@ -28,6 +28,11 @@ which this is built on, is 1.21.7) and players on a 1.21.6+ client.
 
 ## Writing a dialog
 
+With an AI: hand it `plugins/DialogEngine/AI-GUIDE.md`, which the plugin
+writes on every start. It is this section plus the rules that catch the usual
+mistakes.
+
+
 Every folder in `dialogs/` is a namespace, and every key in a `.yml` file in
 it is a dialog: `welcome` in `dialogs/examples/menus.yml` is
 `examples:welcome`. Files sitting directly in `dialogs/` are in the namespace
