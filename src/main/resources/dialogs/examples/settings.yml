@@ -1,0 +1,71 @@
+# examples:settings - every kind of input, a check on one of them, and a
+# confirmation page that carries the values over. Open it with /de open examples:settings
+settings:
+  command: dialog-settings
+  title: "Settings"
+  columns: 2
+  body:
+    - "<gray>Every input kind Dialog Engine draws. Press <white>Save</white> with the nickname empty to see a check fail."
+  inputs:
+    - key: nickname
+      type: text
+      label: "Nickname"
+      max-length: 16
+      required: true
+      pattern: "[A-Za-z0-9_ ]+"
+      error: "A nickname is letters, digits, spaces and _ only."
+    - key: bio
+      type: text
+      label: "About you"
+      lines: 3
+      height: 48
+      max-length: 200
+    - key: colour
+      type: options
+      label: "Colour"
+      options:
+        - { id: blue, text: "<#3670f8>Blue", initial: true }
+        - { id: green, text: "<green>Green" }
+        - { id: gold, text: "<gold>Gold" }
+    - key: volume
+      type: slider
+      label: "Volume"
+      min: 0
+      max: 100
+      step: 5
+      initial: 70
+    - key: notify
+      type: toggle
+      label: "Tell me when friends join"
+      initial: true
+  buttons:
+    - id: save
+      label: "<green>Save"
+      actions:
+        - "[open] settings_confirm"
+    - id: cancel
+      label: "Cancel"
+      validate: false
+      actions:
+        - "[close]"
+
+settings_confirm:
+  title: "Save these?"
+  type: confirmation
+  body:
+    - text:
+        - "<gray>Nickname: <white>{nickname}"
+        - "<gray>Colour: <white>{colour.label}"
+        - "<gray>Volume: <white>{volume}%"
+        - "<gray>Friend alerts: <white>{notify?true:on|off}"
+        - "{bio?:|<gray>About: <white>$value}"
+  confirm:
+    label: "<green>Save"
+    actions:
+      - "[message] <green>Saved, {nickname}."
+      - "[sound] block.note_block.chime"
+      - "[close]"
+  cancel:
+    label: "Back"
+    actions:
+      - "[back]"

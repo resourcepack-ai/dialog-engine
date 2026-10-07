@@ -1,0 +1,560 @@
+package ai.resourcepack.dialogs.core;
+
+import ai.resourcepack.dialogs.api.ActionHandler;
+import ai.resourcepack.dialogs.api.DialogContext;
+import ai.resourcepack.dialogs.api.DialogEngineAPI;
+import ai.resourcepack.dialogs.api.DialogInfo;
+import ai.resourcepack.dialogs.api.ListProvider;
+import ai.resourcepack.dialogs.api.PlaceholderResolver;
+import ai.resourcepack.dialogs.api.event.DialogClickEvent;
+import ai.resourcepack.dialogs.api.event.DialogEngineReloadEvent;
+import ai.resourcepack.dialogs.api.event.DialogInputErrorEvent;
+import ai.resourcepack.dialogs.api.event.DialogOpenEvent;
+import ai.resourcepack.dialogs.core.Defs.ButtonDef;
+import ai.resourcepack.dialogs.core.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.Defs.InputDef;
+import ai.resourcepack.dialogs.core.Defs.InputKind;
+import com.google.gson.Gson;
+import com.google.gson.JsonParser;
+import io.papermc.paper.dialog.DialogResponseView;
+import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
+import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+/** The engine: every dialog, every registration, and what each player is looking at. */
+public final class Engine implements DialogEngineAPI {
+
+    private record Folder(Plugin owner, String namespace, File folder) {}
+
+    private record CodeDialog(Plugin owner, String id, ConfigurationSection section) {}
+
+    private record Owned<T>(Plugin owner, T value) {}
+
+    private final JavaPlugin plugin;
+    private final Renderer renderer = new Renderer(this);
+    private final Actions actions = new Actions(this);
+    private final OpenCommands commands;
+
+    private final List<Folder> folders = new ArrayList<>();
+    private final Map<String, CodeDialog> codeDialogs = new LinkedHashMap<>();
+    private final Map<String, Owned<ActionHandler>> customActions = new ConcurrentHashMap<>();
+    private final List<Owned<Map.Entry<String, PlaceholderResolver>>> resolvers = new ArrayList<>();
+    private final Map<String, Owned<ListProvider>> lists = new ConcurrentHashMap<>();
+    private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
+    private final Set<String> warned = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> jsonCache = new ConcurrentHashMap<>();
+    /** Counts every dialog shown to a player, so a delayed close can tell whether one came since. */
+    private final Map<UUID, Long> shown = new ConcurrentHashMap<>();
+    private long closeDelay = 10;
+
+    private volatile Map<String, DialogDef> dialogs = Map.of();
+    private List<String> problems = List.of();
+
+    private Duration clickLifetime = Duration.ofMinutes(30);
+    private String validationFormat = "<red>{error}";
+    private DialogAfterAction defaultAfter = DialogAfterAction.WAIT_FOR_RESPONSE;
+
+    public Engine(JavaPlugin plugin) {
+        this.plugin = plugin;
+        this.commands = new OpenCommands(this, plugin);
+        folders.add(new Folder(plugin, null, new File(plugin.getDataFolder(), "dialogs")));
+    }
+
+    // ------------------------------------------------------------------ loading
+
+    /** Reads config.yml and every dialog. Returns the problems found. */
+    public List<String> load() {
+        plugin.reloadConfig();
+        var cfg = plugin.getConfig();
+        clickLifetime = Duration.ofMinutes(Math.max(1, cfg.getLong("click-lifetime-minutes", 30)));
+        validationFormat = cfg.getString("validation-format", "<red>{error}");
+        closeDelay = Math.max(0, cfg.getLong("close-delay-ticks", 10));
+        defaultAfter = switch (cfg.getString("default-after", "wait").toLowerCase(Locale.ROOT)) {
+            case "close" -> DialogAfterAction.CLOSE;
+            case "none", "stay" -> DialogAfterAction.NONE;
+            default -> DialogAfterAction.WAIT_FOR_RESPONSE;
+        };
+        Papi.reset();
+        jsonCache.clear();
+        warned.clear();
+
+        Loader loader = new Loader(defaultAfter);
+        Map<String, DialogDef> next = new LinkedHashMap<>();
+        for (Folder f : List.copyOf(folders)) {
+            if (f.namespace() == null) {
+                // The engine's own folder: dialogs/<namespace>/..., and files at the top are "server".
+                File[] children = f.folder().listFiles();
+                if (children == null) continue;
+                java.util.Arrays.sort(children);
+                Map<String, DialogDef> top = new LinkedHashMap<>();
+                File holder = f.folder();
+                for (File child : children) {
+                    if (child.isDirectory()) {
+                        String ns = child.getName().toLowerCase(Locale.ROOT);
+                        if (!ns.matches("[a-z0-9_.\\-]+")) {
+                            loader.problems.add("dialogs/" + child.getName() + ": a folder name is a namespace (a-z, 0-9, _ . -)");
+                            continue;
+                        }
+                        next.putAll(loader.loadFolder(ns, child));
+                    }
+                }
+                top.putAll(loadTopLevel(loader, holder));
+                next.putAll(top);
+            } else {
+                next.putAll(loader.loadFolder(f.namespace(), f.folder()));
+            }
+        }
+        for (CodeDialog c : codeDialogs.values()) {
+            String ns = c.id().substring(0, c.id().indexOf(':'));
+            DialogDef def = loader.parse(c.id(), ns, c.owner().getName(), c.section(), c.owner().getDataFolder());
+            if (def != null) next.put(c.id(), def);
+        }
+        dialogs = Collections.unmodifiableMap(next);
+        problems = List.copyOf(loader.problems);
+        for (String p : problems) plugin.getLogger().warning(p);
+        commands.sync(dialogs.values());
+        return problems;
+    }
+
+    private Map<String, DialogDef> loadTopLevel(Loader loader, File folder) {
+        // Only the .yml files directly in dialogs/, as namespace "server".
+        File tmp = folder;
+        Map<String, DialogDef> out = new LinkedHashMap<>();
+        File[] files = tmp.listFiles(f -> f.isFile() && (f.getName().endsWith(".yml") || f.getName().endsWith(".yaml")));
+        if (files == null) return out;
+        java.util.Arrays.sort(files);
+        for (File file : files) {
+            org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+            try {
+                yaml.load(file);
+            } catch (Exception e) {
+                loader.problems.add("dialogs/" + file.getName() + ": " + String.valueOf(e.getMessage()).split("\n")[0]);
+                continue;
+            }
+            for (String key : yaml.getKeys(false)) {
+                ConfigurationSection s = yaml.getConfigurationSection(key);
+                if (s == null) continue;
+                DialogDef def = loader.parse("server:" + key.toLowerCase(Locale.ROOT), "server", "dialogs/" + file.getName(), s, folder);
+                if (def != null) out.put(def.id(), def);
+            }
+        }
+        return out;
+    }
+
+    public List<String> problems() {
+        return problems;
+    }
+
+    public JavaPlugin plugin() {
+        return plugin;
+    }
+
+    Duration clickLifetime() {
+        return clickLifetime;
+    }
+
+    String validationFormat() {
+        return validationFormat;
+    }
+
+    String message(String key, String fallback) {
+        return plugin.getConfig().getString("messages." + key, fallback);
+    }
+
+    void warnOnce(String message) {
+        if (warned.add(message)) plugin.getLogger().warning(message);
+    }
+
+    DialogDef def(String id) {
+        return dialogs.get(id);
+    }
+
+    /** "confirm" inside namespace "verdict" is "verdict:confirm". */
+    String qualify(String id, String namespace) {
+        String trimmed = id.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.contains(":") || namespace == null) return trimmed;
+        return namespace + ":" + trimmed;
+    }
+
+    public void shutdown() {
+        commands.clear();
+        sessions.clear();
+    }
+
+    public void forget(Player player) {
+        sessions.remove(player.getUniqueId());
+        shown.remove(player.getUniqueId());
+    }
+
+    /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
+    void closeUnlessShown(Player player) {
+        long before = shown.getOrDefault(player.getUniqueId(), 0L);
+        Runnable close = () -> {
+            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) player.closeDialog();
+        };
+        if (closeDelay == 0) close.run();
+        else Bukkit.getScheduler().runTaskLater(plugin, close, closeDelay);
+    }
+
+    // ------------------------------------------------------------------ showing
+
+    /** Draws a session's dialog. The one place a dialog reaches a player. */
+    boolean show(Player player, Session session, boolean reopened) {
+        DialogDef def = dialogs.get(session.dialogId);
+        if (def == null || !player.isOnline()) return false;
+        def.defaults().forEach(session.values::putIfAbsent);
+        DialogOpenEvent event = new DialogOpenEvent(player, def.id(), session.values, reopened);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) return false;
+        try {
+            if (def.json() != null) {
+                showJson(player, def, session);
+            } else {
+                Renderer.Drawn drawn = renderer.draw(def, session, player);
+                player.showDialog(drawn.dialog());
+            }
+            sessions.put(player.getUniqueId(), session);
+            shown.merge(player.getUniqueId(), 1L, Long::sum);
+            return true;
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(Level.WARNING, "Could not show " + def.id() + " to " + player.getName() + ": " + e.getMessage(), e);
+            player.sendMessage(Text.MM.deserialize(message("broken", "<red>That dialog could not be shown. The console says why.")));
+            return false;
+        }
+    }
+
+    private void showJson(Player player, DialogDef def, Session session) {
+        String raw = jsonCache.computeIfAbsent(def.json(), path -> {
+            try {
+                return Files.readString(new File(path).toPath(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new IllegalStateException("cannot read " + path, e);
+            }
+        });
+        Scope scope = new Scope(this, player, def.id(), session.values, session.untrusted, null, null);
+        String filled = Text.fill(raw, scope, Text.Mode.JSON);
+        // Minified, so the inline argument is one line. The game's SNBT reads JSON objects.
+        String json = new Gson().toJson(JsonParser.parseString(filled));
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:dialog show " + player.getUniqueId() + " " + json);
+    }
+
+    /** Opens a dialog the way a player asked for it: with the permission check, and with their words untrusted. */
+    boolean openAsPlayer(Player player, String id, Map<String, String> values, Set<String> untrusted, Session previous) {
+        DialogDef def = dialogs.get(id);
+        if (def == null) {
+            player.sendMessage(Text.MM.deserialize(message("unknown-dialog", "<red>There is no dialog called {id}.").replace("{id}", Text.MM.escapeTags(id))));
+            return false;
+        }
+        if (def.permission() != null && !player.hasPermission(def.permission())) {
+            player.sendMessage(Text.MM.deserialize(message("no-permission", "<red>You can't open that.")));
+            return false;
+        }
+        Session s = previous == null
+                ? new Session(player.getUniqueId(), id, values, untrusted, null)
+                : previous.next(id, values, untrusted);
+        return show(player, s, false);
+    }
+
+    // ------------------------------------------------------------------ clicks
+
+    void onClick(Player player, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
+                 List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, DialogResponseView view) {
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTask(plugin, () -> onClick(player, def, button, session, alias, row, inputs, optionLabels, view));
+            return;
+        }
+        if (!player.isOnline()) return;
+
+        Map<String, String> typed = new LinkedHashMap<>();
+        Set<String> untrusted = new HashSet<>(session.untrusted);
+        Map<String, String> values = new LinkedHashMap<>(session.values);
+        for (InputDef in : inputs) {
+            String key = in.key();
+            String v = null;
+            if (view != null) {
+                switch (in.kind()) {
+                    case TEXT -> v = view.getText(key);
+                    case OPTIONS -> {
+                        v = view.getText(key);
+                        Map<String, String> labels = optionLabels.getOrDefault(key, Map.of());
+                        // A modified client can send anything: only an option we drew counts.
+                        if (v != null && !labels.containsKey(v)) v = null;
+                        if (v != null) values.put(key + ".label", labels.get(v));
+                    }
+                    case TOGGLE -> {
+                        Boolean b = view.getBoolean(key);
+                        if (b != null) {
+                            v = b.toString();
+                            String text = b ? in.onTrue() : in.onFalse();
+                            if (text != null) values.put(key + ".text", text);
+                        }
+                    }
+                    case SLIDER -> {
+                        Float f = view.getFloat(key);
+                        if (f != null && !f.isNaN()) v = Text.number(Math.max(in.min(), Math.min(in.max(), f)));
+                    }
+                }
+            }
+            if (v == null) continue;
+            typed.put(key, v);
+            values.put(key, v);
+            if (in.kind() == InputKind.TEXT) untrusted.add(key);
+            else untrusted.remove(key);
+        }
+        values.remove("error");
+
+        if (button.validate()) {
+            for (InputDef in : inputs) {
+                String failure = validate(in, typed.get(in.key()), player, values, untrusted, def);
+                if (failure == null) continue;
+                DialogInputErrorEvent event = new DialogInputErrorEvent(player, def.id(), in.key(), Map.copyOf(typed), failure);
+                Bukkit.getPluginManager().callEvent(event);
+                values.put("error", event.getMessage());
+                untrusted.remove("error");
+                show(player, session.with(values, untrusted), true);
+                return;
+            }
+        }
+
+        ClickCtx ctx = new ClickCtx(this, player, def, session.with(values, untrusted), button.id(), typed, alias, row);
+        List<String> list = new ArrayList<>(button.actions());
+        DialogClickEvent event = new DialogClickEvent(ctx, list);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            ctx.finish();
+            return;
+        }
+        actions.run(ctx, list, 0);
+    }
+
+    private String validate(InputDef in, String value, Player player, Map<String, String> values, Set<String> untrusted, DialogDef def) {
+        if (in.kind() != InputKind.TEXT) return null;
+        String v = value == null ? "" : value;
+        Scope scope = new Scope(this, player, def.id(), values, untrusted, null, null);
+        String label = Text.MM.stripTags(Text.fill(in.label(), scope, Text.Mode.TEXT));
+        if (label.isBlank()) label = in.key();
+        String custom = in.error();
+        if (in.required() && v.isBlank()) {
+            return custom != null ? custom : message("required", "{label} can't be empty.").replace("{label}", label);
+        }
+        if (!v.isBlank() && in.minLength() > 0 && v.length() < in.minLength()) {
+            return custom != null ? custom : message("too-short", "{label} needs at least {min} characters.")
+                    .replace("{label}", label).replace("{min}", String.valueOf(in.minLength()));
+        }
+        if (!v.isBlank() && in.pattern() != null) {
+            try {
+                if (!Pattern.compile(in.pattern()).matcher(v).matches()) {
+                    return custom != null ? custom : message("invalid", "{label} isn't valid.").replace("{label}", label);
+                }
+            } catch (PatternSyntaxException e) {
+                warnOnce(def.id() + " input " + in.key() + " has a bad pattern: " + e.getDescription());
+            }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ lookups used while drawing
+
+    String resolvePlaceholder(Player viewer, DialogContext context, String key) {
+        List<Owned<Map.Entry<String, PlaceholderResolver>>> snapshot;
+        synchronized (resolvers) {
+            snapshot = List.copyOf(resolvers);
+        }
+        for (Owned<Map.Entry<String, PlaceholderResolver>> r : snapshot) {
+            String prefix = r.value().getKey();
+            if (key.length() > prefix.length() && key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+                try {
+                    String v = r.value().getValue().resolve(viewer, context, key.substring(prefix.length()));
+                    if (v != null) return v;
+                } catch (RuntimeException e) {
+                    warnOnce("Placeholder " + key + " from " + r.owner().getName() + " threw " + e);
+                }
+            }
+        }
+        return null;
+    }
+
+    List<Map<String, String>> rows(String list, Scope scope) {
+        DialogDef def = dialogs.get(scope.dialogId);
+        if (def != null && def.lists().containsKey(list)) return def.lists().get(list);
+        Owned<ListProvider> provider = lists.get(list.toLowerCase(Locale.ROOT));
+        if (provider != null) {
+            try {
+                List<Map<String, String>> rows = provider.value().rows(scope.viewer, scope);
+                return rows == null ? List.of() : rows;
+            } catch (RuntimeException e) {
+                warnOnce("List " + list + " from " + provider.owner().getName() + " threw " + e);
+                return List.of();
+            }
+        }
+        List<Map<String, String>> builtIn = BuiltInLists.rows(list, scope);
+        if (builtIn != null) return builtIn;
+        warnOnce(scope.dialogId + " repeats over a list called " + list + ", which nothing provides");
+        return List.of();
+    }
+
+    ActionHandler customAction(String tag) {
+        Owned<ActionHandler> h = customActions.get(tag);
+        return h == null ? null : h.value();
+    }
+
+    void remember(Player player, Session session) {
+        sessions.put(player.getUniqueId(), session);
+    }
+
+    Session session(Player player) {
+        return sessions.get(player.getUniqueId());
+    }
+
+    // ------------------------------------------------------------------ API
+
+    @Override
+    public boolean open(Player player, String dialogId, Map<String, String> values) {
+        if (player == null || !player.isOnline()) return false;
+        String id = dialogId.toLowerCase(Locale.ROOT);
+        if (!dialogs.containsKey(id)) return false;
+        return show(player, new Session(player.getUniqueId(), id, values == null ? Map.of() : values, Set.of(), null), false);
+    }
+
+    @Override
+    public void close(Player player) {
+        sessions.remove(player.getUniqueId());
+        player.closeDialog();
+    }
+
+    @Override
+    public boolean refresh(Player player) {
+        Session s = sessions.get(player.getUniqueId());
+        if (s == null) return false;
+        return show(player, s.with(s.values, s.untrusted), true);
+    }
+
+    @Override
+    public Optional<String> current(Player player) {
+        Session s = sessions.get(player.getUniqueId());
+        return s == null ? Optional.empty() : Optional.of(s.dialogId);
+    }
+
+    @Override
+    public Map<String, String> values(Player player) {
+        Session s = sessions.get(player.getUniqueId());
+        return s == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(s.values));
+    }
+
+    @Override
+    public Set<String> ids() {
+        return Collections.unmodifiableSet(dialogs.keySet());
+    }
+
+    @Override
+    public Optional<DialogInfo> info(String dialogId) {
+        DialogDef d = dialogs.get(dialogId.toLowerCase(Locale.ROOT));
+        if (d == null) return Optional.empty();
+        return Optional.of(new DialogInfo(d.id(), d.source(), Optional.ofNullable(d.command()), Optional.ofNullable(d.permission()),
+                d.args(), d.inputs().stream().map(InputDef::key).toList()));
+    }
+
+    @Override
+    public boolean canOpen(Player player, String dialogId) {
+        DialogDef d = dialogs.get(dialogId.toLowerCase(Locale.ROOT));
+        return d != null && (d.permission() == null || player.hasPermission(d.permission()));
+    }
+
+    @Override
+    public void registerFolder(Plugin owner, String namespace, File folder) {
+        String ns = namespace.toLowerCase(Locale.ROOT);
+        if (!ns.matches("[a-z0-9_.\\-]+")) throw new IllegalArgumentException("namespace must be a-z, 0-9, _ . -");
+        folders.removeIf(f -> ns.equals(f.namespace()));
+        folders.add(new Folder(owner, ns, folder));
+        load();
+    }
+
+    @Override
+    public void registerDialog(Plugin owner, String dialogId, ConfigurationSection definition) {
+        String id = dialogId.toLowerCase(Locale.ROOT);
+        if (!id.contains(":")) throw new IllegalArgumentException("a dialog id is namespace:name");
+        codeDialogs.put(id, new CodeDialog(owner, id, definition));
+        load();
+    }
+
+    @Override
+    public void registerAction(Plugin owner, String tag, ActionHandler handler) {
+        customActions.put(tag.toLowerCase(Locale.ROOT).replace("[", "").replace("]", ""), new Owned<>(owner, handler));
+    }
+
+    @Override
+    public void registerPlaceholders(Plugin owner, String prefix, PlaceholderResolver resolver) {
+        synchronized (resolvers) {
+            resolvers.removeIf(r -> r.value().getKey().equalsIgnoreCase(prefix));
+            resolvers.add(new Owned<>(owner, Map.entry(prefix, resolver)));
+            // Longest prefix first, so "shop_vip_" beats "shop_".
+            resolvers.sort((a, b) -> b.value().getKey().length() - a.value().getKey().length());
+        }
+    }
+
+    @Override
+    public void registerList(Plugin owner, String name, ListProvider provider) {
+        lists.put(name.toLowerCase(Locale.ROOT), new Owned<>(owner, provider));
+    }
+
+    @Override
+    public void unregister(Plugin owner) {
+        boolean dialogsChanged = folders.removeIf(f -> f.owner() == owner && f.namespace() != null)
+                | codeDialogs.values().removeIf(c -> c.owner() == owner);
+        customActions.values().removeIf(o -> o.owner() == owner);
+        lists.values().removeIf(o -> o.owner() == owner);
+        synchronized (resolvers) {
+            resolvers.removeIf(o -> o.owner() == owner);
+        }
+        if (dialogsChanged && plugin.isEnabled()) load();
+    }
+
+    @Override
+    public String escape(String untrusted) {
+        return untrusted == null ? "" : Text.MM.escapeTags(untrusted);
+    }
+
+    @Override
+    public Component text(Player viewer, String miniMessage, Map<String, String> values) {
+        Scope scope = new Scope(this, viewer, "", new LinkedHashMap<>(values), Set.of(), null, null);
+        return Text.component(miniMessage, scope);
+    }
+
+    @Override
+    public void reload() {
+        load();
+        Bukkit.getPluginManager().callEvent(new DialogEngineReloadEvent(dialogs.size()));
+    }
+
+    OpenCommands commands() {
+        return commands;
+    }
+
+    Map<String, DialogDef> all() {
+        return dialogs;
+    }
+}

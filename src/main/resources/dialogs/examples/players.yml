@@ -1,0 +1,40 @@
+# examples:players - a button per online player, eight to a page, each one
+# opening a dialog about that player. Open it with /players.
+players:
+  command: players
+  title: "Online <dark_gray>({online})"
+  columns: 2
+  body:
+    - "<gray>Page {page} of {pages}"
+  buttons:
+    - for-each: online_players
+      per-page: 8
+      label: "{row.name}"
+      tooltip: "{row.world} · {row.ping}ms"
+      width: 140
+      actions:
+        - "[open] player_card target={row.name}"
+    - label: "<gray>← Previous"
+      if: "{has_prev}"
+      width: 140
+      actions: ["[page] prev"]
+    - label: "<gray>Next →"
+      if: "{has_next}"
+      width: 140
+      actions: ["[page] next"]
+  exit:
+    label: "Close"
+
+player_card:
+  title: "{target}"
+  body:
+    - head: "{target}"
+      width: 48
+      height: 48
+      description: "<white>{target}"
+  buttons:
+    - label: "Message"
+      actions:
+        - "[suggest] /msg {target} "
+    - label: "Back"
+      actions: ["[back]"]

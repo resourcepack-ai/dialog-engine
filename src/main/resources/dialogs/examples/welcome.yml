@@ -1,0 +1,20 @@
+# examples:welcome - a notice with a picture and a link. Open it with /welcome.
+welcome:
+  command: welcome
+  title: "<#3670f8><bold>Welcome</bold></#3670f8>"
+  body:
+    - head: "{player}"
+      width: 32
+      height: 32
+      description: "<gray>Good to see you, <white>{player}</white>."
+    - text:
+        - "There are <white>{online}</white> of us online right now."
+        - ""
+        - "<gray>This is a Dialog Engine example. Edit it in"
+        - "<gray>plugins/DialogEngine/dialogs/examples/welcome.yml"
+  buttons:
+    - label: "<green>Let's go"
+      tooltip: "Close this and play"
+      actions:
+        - "[sound] entity.experience_orb.pickup 1 1.4"
+        - "[close]"

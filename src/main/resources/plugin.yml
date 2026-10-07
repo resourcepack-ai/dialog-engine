@@ -1,0 +1,18 @@
+name: DialogEngine
+version: '${version}'
+main: ai.resourcepack.dialogs.DialogEnginePlugin
+api-version: '1.21'
+author: ResourcePack AI
+website: https://resourcepack.ai
+description: Minecraft's dialog screens, written in YAML and driven from Java.
+softdepend: [PlaceholderAPI]
+commands:
+  dialogengine:
+    description: List, open, inspect and reload dialogs.
+    usage: /de <list|open|info|reload>
+    aliases: [de, dialogs]
+    permission: dialogengine.admin
+permissions:
+  dialogengine.admin:
+    description: Use /dialogengine (list, open dialogs on anybody, reload).
+    default: op

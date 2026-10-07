@@ -1,0 +1,40 @@
+# Dialog Engine
+#
+# Dialogs live in dialogs/. Every folder in there is a namespace: a dialog
+# called "welcome" in dialogs/examples/menus.yml is examples:welcome. Files
+# sitting directly in dialogs/ are in the namespace "server". Other plugins
+# keep theirs in their own folders and hand them to the engine.
+#
+# /de reload reads everything again. /de list shows what loaded.
+
+# How long a dialog's buttons keep working after it is drawn, in minutes.
+# A player who leaves a dialog open longer than this and then clicks gets
+# nothing; drawing it again (any refresh) starts the clock over.
+click-lifetime-minutes: 30
+
+# What a dialog does the moment a button is pressed, when the dialog does not
+# say (after: in its definition):
+#   wait  - stays up with "waiting for the server" until the engine answers.
+#           No flicker between one dialog and the next. (Recommended)
+#   close - closes at once, then the next dialog (if any) opens.
+#   none  - stays exactly as it is.
+default-after: wait
+
+# Under "wait", how long the engine holds the waiting screen for a plugin to
+# answer a button (say, with a dialog it has to look something up for) before
+# closing it. In ticks; 20 is a second.
+close-delay-ticks: 10
+
+# How a failed input check is shown, when the dialog's body does not print
+# {error} itself. MiniMessage.
+validation-format: "<red>⚠ {error}"
+
+# Everything the engine says to players. MiniMessage.
+messages:
+  no-permission: "<red>You can't open that."
+  unknown-dialog: "<red>There is no dialog called {id}."
+  broken: "<red>That dialog could not be shown. The console says why."
+  required: "{label} can't be empty."
+  too-short: "{label} needs at least {min} characters."
+  invalid: "{label} isn't valid."
+  link: "<gray>Open: <aqua><u>{url}</u></aqua>"

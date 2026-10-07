@@ -1,0 +1,95 @@
+// The oldest-API audit: the guard rail on the whole version system.
+//
+// The engine supports a range of Minecraft versions but compiles against the
+// newest API in that range, so an ordinary build cannot tell you whether a
+// call it just accepted exists on the oldest supported server. This compiles
+// the same sources against the OLDEST API and fails on any error that is not
+// inside a class listed in version-arms.txt.
+//
+// What it catches is the whole class of mistake this design is built around:
+// somebody adds a feature, calls a method that arrived in 1.21.x, the build is
+// green, the tests are green, and the plugin dies on start for every server
+// nobody here runs. The exemption list is the deliberate escape hatch — a
+// class named there is one arm of a version fork, constructed only after
+// something has asked Compatibility, and so never loaded where it would fail.
+//
+// What it CANNOT catch is a version difference that is not an API. See
+// MOUNT_OFFSET in Seats: a number that changed in 1.20.2, compiles everywhere,
+// and is simply wrong on the versions it is wrong on.
+
+configurations {
+    oldestApi
+}
+
+dependencies {
+    oldestApi "org.spigotmc:spigot-api:${oldestSupportedApi}"
+}
+
+tasks.register('auditOldestApi') {
+    description = 'Compiles against the oldest supported Minecraft API and fails on unguarded calls.'
+    group = 'verification'
+
+    doLast {
+        def exempt = file('version-arms.txt').readLines()
+                .collect { it.trim() }
+                .findAll { it && !it.startsWith('#') }
+                .collect { it.replace('/', File.separator) }
+
+        // The oldest API first, and the newest one dropped entirely, so a
+        // class present in both resolves to the old copy.
+        def classpath = (configurations.oldestApi.files as List) +
+                (sourceSets.main.compileClasspath.files as List)
+                        .findAll { !it.name.startsWith('spigot-api') }
+
+        def sources = fileTree('src/main/java').matching { include '**/*.java' }.files as List
+
+        def compiler = javax.tools.ToolProvider.systemJavaCompiler
+        if (compiler == null) {
+            throw new GradleException('No java compiler on this JVM; run Gradle on a JDK.')
+        }
+
+        def diagnostics = new javax.tools.DiagnosticCollector<javax.tools.JavaFileObject>()
+        def fileManager = compiler.getStandardFileManager(diagnostics, null, null)
+        def out = layout.buildDirectory.dir('oldest-api-audit').get().asFile
+        out.mkdirs()
+        def options = ['-nowarn', '-proc:none',
+                       '-d', out.absolutePath,
+                       '-classpath', classpath.collect { it.absolutePath }.join(File.pathSeparator)]
+        compiler.getTask(null, fileManager, diagnostics, options, null,
+                fileManager.getJavaFileObjectsFromFiles(sources)).call()
+        fileManager.close()
+
+        def offenders = new LinkedHashMap<String, List<String>>()
+        diagnostics.diagnostics.each { d ->
+            if (d.kind != javax.tools.Diagnostic.Kind.ERROR) {
+                return
+            }
+            def source = d.source == null ? '(no file)' : d.source.name
+            if (exempt.any { source.endsWith(it) }) {
+                return
+            }
+            offenders.computeIfAbsent(source, { [] })
+                    .add('line ' + d.lineNumber + ': ' + d.getMessage(null).readLines()[0])
+        }
+
+        if (offenders.isEmpty()) {
+            logger.lifecycle('Oldest-API audit clean against ' + oldestSupportedApi + ': ' +
+                    exempt.size() + ' version arms exempt, nothing else names a newer API.')
+            return
+        }
+
+        def nl = System.lineSeparator()
+        def report = new StringBuilder()
+        report.append('These name a Minecraft API newer than ')
+                .append(oldestSupportedApi).append(', outside any version fork:').append(nl).append(nl)
+        offenders.each { source, messages ->
+            report.append('  ').append(source).append(nl)
+            messages.unique().each { report.append('    ').append(it).append(nl) }
+        }
+        report.append(nl)
+                .append('Either guard the call behind a Feature and move it into a class of ')
+                .append('its own, or - if that class IS such an arm and is never constructed ')
+                .append('without asking Compatibility first - add it to version-arms.txt.')
+        throw new GradleException(report.toString())
+    }
+}
