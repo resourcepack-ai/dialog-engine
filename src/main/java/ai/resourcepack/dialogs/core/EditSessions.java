@@ -233,8 +233,24 @@ final class EditSessions {
         try {
             YamlConfiguration yaml = new YamlConfiguration();
             yaml.load(live.file);
+            // Comments hang off the keys they sit above, and replacing the
+            // section drops every one of them: kept for each line still there.
+            Map<String, List<String>> above = new LinkedHashMap<>();
+            Map<String, List<String>> inline = new LinkedHashMap<>();
+            List<String> paths = new ArrayList<>(List.of(live.key));
+            ConfigurationSection old = yaml.getConfigurationSection(live.key);
+            if (old != null) for (String sub : old.getKeys(true)) paths.add(live.key + "." + sub);
+            for (String path : paths) {
+                above.put(path, yaml.getComments(path));
+                inline.put(path, yaml.getInlineComments(path));
+            }
             yaml.set(live.key, null);
             yaml.createSection(live.key, wholeNumbers(pull.dialog.definition));
+            for (String path : paths) {
+                if (!yaml.contains(path)) continue;
+                if (!above.get(path).isEmpty()) yaml.setComments(path, above.get(path));
+                if (!inline.get(path).isEmpty()) yaml.setInlineComments(path, inline.get(path));
+            }
             yaml.save(live.file);
         } catch (Exception e) {
             say(tell, "<red>Could not write " + Text.MM.escapeTags(expected) + ": " + Text.MM.escapeTags(String.valueOf(e.getMessage())));

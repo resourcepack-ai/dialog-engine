@@ -28,6 +28,11 @@ which this is built on, is 1.21.7) and players on a 1.21.6+ client.
 
 ## Writing a dialog
 
+In the browser: `/de edit <namespace:id>` opens it in Studio's dialog editor
+(no account) and Send to server writes it back under its key, leaving the rest
+of the file alone. `edit.url` in config.yml says where the editor is.
+
+
 With an AI: hand it `plugins/DialogEngine/AI-GUIDE.md`, which the plugin
 writes on every start. It is this section plus the rules that catch the usual
 mistakes.
