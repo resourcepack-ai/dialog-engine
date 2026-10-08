@@ -100,8 +100,12 @@ public final class AdminCommand implements TabExecutor {
                     say(sender, "Say which player: /de open " + id + " <player>");
                     return true;
                 }
-                if (engine.def(id) == null) {
+                if (engine.def(id) == null && !engine.drawn.has(id)) {
                     say(sender, "<red>There is no dialog called " + Text.MM.escapeTags(id) + ". <gray>/de list");
+                    return true;
+                }
+                if (engine.drawn.has(id)) {
+                    if (!engine.drawn.open(target, id, values)) say(sender, "<red>It did not open; the console says why.");
                     return true;
                 }
                 // Typed by staff, but still typed: escape it where it is printed.
