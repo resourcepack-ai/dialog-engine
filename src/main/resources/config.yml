@@ -44,3 +44,18 @@ messages:
 # its file here and reloads. Only what you edit is sent: that one dialog.
 edit:
   url: "https://studio.resourcepack.ai"
+
+# Drawn dialogs (made with /de edit) are drawn by a small resource pack. It is
+# only built and sent once there is one; plain YAML dialogs never need it.
+pack:
+  # Send it to players as they join, beside any pack the server already sends.
+  send: true
+  # Kick players who decline it.
+  required: false
+  # Served from this server on this port...
+  port: 8165
+  # ...at this address. Set it to the server's public address or domain.
+  public-host: ""
+  # Or host the pack yourself and put its URL here (/de pack writes it out).
+  url: ""
+  prompt: "<gray>This server's menus are drawn with a small resource pack."

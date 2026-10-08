@@ -47,11 +47,29 @@ public final class AdminCommand implements TabExecutor {
                 if (!id.contains(":")) id = "server:" + id;
                 engine.edits().open(sender, id);
             }
+            case "pack" -> {
+                if (!engine.drawnPack.present()) {
+                    say(sender, "There is no drawn dialog yet, so no pack. <white>/de edit server:shop</white> draws one.");
+                    return true;
+                }
+                try {
+                    java.io.File out = engine.drawnPack.export();
+                    say(sender, "Wrote the drawn dialog pack to <white>plugins/DialogEngine/" + out.getName()
+                            + "</white>. Players download it from <white>" + Text.MM.escapeTags(engine.drawnPack.url()) + "</white>.");
+                } catch (java.io.IOException e) {
+                    say(sender, "<red>Could not write it: " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
+                }
+            }
             case "list" -> {
                 Map<String, List<String>> byNamespace = new LinkedHashMap<>();
                 for (DialogDef d : engine.all().values()) {
                     byNamespace.computeIfAbsent(d.namespace(), k -> new ArrayList<>()).add(d.id().substring(d.id().indexOf(':') + 1)
                             + (d.command() != null ? " <dark_gray>(/" + d.command() + ")</dark_gray>" : ""));
+                }
+                for (String id : engine.drawn.ids()) {
+                    String cmd = engine.drawn.get(id).map(DrawnDialogs.Drawn::command).orElse(null);
+                    byNamespace.computeIfAbsent(id.substring(0, id.indexOf(':')), k -> new ArrayList<>()).add(id.substring(id.indexOf(':') + 1)
+                            + " <#3670f8>(drawn)</#3670f8>" + (cmd != null ? " <dark_gray>(/" + cmd + ")</dark_gray>" : ""));
                 }
                 say(sender, "<white>" + engine.ids().size() + "</white> dialogs:");
                 byNamespace.forEach((ns, names) -> sender.sendMessage(Text.MM.deserialize(
@@ -108,7 +126,7 @@ public final class AdminCommand implements TabExecutor {
                         + (d.args().isEmpty() ? "" : ", args " + String.join(" ", d.args()))));
             }
             default -> {
-                say(sender, "<white>/de list</white> <dark_gray>·</dark_gray> <white>/de open <id> [player] [key=value]</white> <dark_gray>·</dark_gray> <white>/de info <id></white> <dark_gray>·</dark_gray> <white>/de edit <id></white> <dark_gray>·</dark_gray> <white>/de reload</white>");
+                say(sender, "<white>/de list</white> <dark_gray>·</dark_gray> <white>/de open <id> [player] [key=value]</white> <dark_gray>·</dark_gray> <white>/de info <id></white> <dark_gray>·</dark_gray> <white>/de edit <id></white> <dark_gray>·</dark_gray> <white>/de pack</white> <dark_gray>·</dark_gray> <white>/de reload</white>");
             }
         }
         return true;
@@ -118,7 +136,7 @@ public final class AdminCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
-            for (String s : List.of("list", "open", "info", "edit", "reload")) if (s.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(s);
+            for (String s : List.of("list", "open", "info", "edit", "pack", "reload")) if (s.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(s);
         } else if (args.length == 2 && (args[0].equalsIgnoreCase("open") || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("edit"))) {
             for (String id : engine.ids()) if (id.startsWith(args[1].toLowerCase(Locale.ROOT))) out.add(id);
         } else if (args.length == 3 && args[0].equalsIgnoreCase("open")) {

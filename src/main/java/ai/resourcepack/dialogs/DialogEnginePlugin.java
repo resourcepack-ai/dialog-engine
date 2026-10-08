@@ -45,6 +45,14 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         engine.load();
         DialogEngine.set(engine);
 
+        PluginCommand click = getCommand("dialogclick");
+        if (click != null) {
+            click.setExecutor((sender, command, label, args) -> {
+                if (sender instanceof org.bukkit.entity.Player p) engine.drawnClick(p, args);
+                return true;
+            });
+            click.setTabCompleter((sender, command, label, args) -> java.util.List.of());
+        }
         PluginCommand de = getCommand("dialogengine");
         if (de != null) {
             AdminCommand admin = new AdminCommand(engine);
@@ -59,6 +67,11 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
     public void onDisable() {
         if (engine != null) engine.shutdown();
         DialogEngine.set(null);
+    }
+
+    @EventHandler
+    public void onJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        engine.sendDrawnPack(event.getPlayer());
     }
 
     @EventHandler

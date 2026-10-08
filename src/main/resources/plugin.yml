@@ -9,9 +9,12 @@ softdepend: [PlaceholderAPI]
 commands:
   dialogengine:
     description: List, open, inspect and reload dialogs.
-    usage: /de <list|open|info|reload>
+    usage: /de <list|open|info|edit|pack|reload>
     aliases: [de, dialogs]
     permission: dialogengine.admin
+  dialogclick:
+    description: What a click on a drawn dialog runs. Only does what the dialog you were shown allows.
+    usage: /dialogclick
 permissions:
   dialogengine.admin:
     description: Use /dialogengine (list, open dialogs on anybody, reload).

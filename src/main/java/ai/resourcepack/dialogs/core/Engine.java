@@ -137,7 +137,25 @@ public final class Engine implements DialogEngineAPI {
         problems = List.copyOf(loader.problems);
         for (String p : problems) plugin.getLogger().warning(p);
         commands.sync(dialogs.values());
+        drawn.load();
+        for (String p : drawn.problems) plugin.getLogger().warning(p);
+        drawnPack.build(drawn.folder());
         return problems;
+    }
+
+    /** Drawn dialogs: Studio's, run on RP Engine's dialog code (DrawnDialogs). */
+    final DrawnDialogs drawn = new DrawnDialogs(this);
+    /** The pack they are drawn with. */
+    final DrawnPack drawnPack = new DrawnPack(this);
+
+    /** {@code /dialogclick}: what a drawn dialog's clicks run. */
+    public void drawnClick(Player player, String[] args) {
+        drawn.click(player, args);
+    }
+
+    /** Sends the drawn dialog pack, when there is one. */
+    public void sendDrawnPack(Player player) {
+        drawnPack.send(player);
     }
 
     private Map<String, DialogDef> loadTopLevel(Loader loader, File folder) {
@@ -210,11 +228,14 @@ public final class Engine implements DialogEngineAPI {
 
     public void shutdown() {
         if (edits != null) edits.shutdown();
+        drawn.shutdown();
+        drawnPack.stop();
         commands.clear();
         sessions.clear();
     }
 
     public void forget(Player player) {
+        drawn.forget(player);
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
     }
@@ -445,6 +466,7 @@ public final class Engine implements DialogEngineAPI {
     public boolean open(Player player, String dialogId, Map<String, String> values) {
         if (player == null || !player.isOnline()) return false;
         String id = dialogId.toLowerCase(Locale.ROOT);
+        if (drawn.has(id)) return drawn.open(player, id, values);
         if (!dialogs.containsKey(id)) return false;
         return show(player, new Session(player.getUniqueId(), id, values == null ? Map.of() : values, Set.of(), null), false);
     }
@@ -476,7 +498,10 @@ public final class Engine implements DialogEngineAPI {
 
     @Override
     public Set<String> ids() {
-        return Collections.unmodifiableSet(dialogs.keySet());
+        if (drawn.ids().isEmpty()) return Collections.unmodifiableSet(dialogs.keySet());
+        Set<String> all = new java.util.LinkedHashSet<>(dialogs.keySet());
+        all.addAll(drawn.ids());
+        return Collections.unmodifiableSet(all);
     }
 
     @Override
@@ -489,6 +514,7 @@ public final class Engine implements DialogEngineAPI {
 
     @Override
     public boolean canOpen(Player player, String dialogId) {
+        if (drawn.has(dialogId)) return drawn.get(dialogId).map(d -> d.permission() == null || player.hasPermission(d.permission())).orElse(false);
         DialogDef d = dialogs.get(dialogId.toLowerCase(Locale.ROOT));
         return d != null && (d.permission() == null || player.hasPermission(d.permission()));
     }

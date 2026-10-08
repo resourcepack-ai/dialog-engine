@@ -49,6 +49,7 @@ final class EditSessions {
 
     private static final long POLL_TICKS = 60L;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+    private static final java.lang.reflect.Type MAP = new com.google.gson.reflect.TypeToken<Map<String, Object>>() {}.getType();
 
     private record Live(String id, String pullToken, Instant expires, File file, String key, String dialogId,
                         UUID opener, long applied) {
@@ -78,114 +79,63 @@ final class EditSessions {
 
     // ------------------------------------------------------------------ opening
 
-    /** Opens a session on {@code dialogId}, making the dialog first when there is none. */
+    /**
+     * Opens a session on {@code dialogId}: a drawn dialog, edited in Studio's
+     * own dialog editor. A plain YAML dialog is edited in its file, and a name
+     * held by one is not taken; any other name is a drawn dialog, new or not.
+     */
     void open(CommandSender sender, String dialogId) {
-        if (!dialogId.matches("[a-z0-9_.\\-]+:[a-z0-9_.\\-]+")) {
-            say(sender, "Name a dialog as namespace:id, like <white>server:shop</white>.");
+        if (!dialogId.matches("[a-z0-9_\\-]+:[a-z0-9_\\-]+")) {
+            say(sender, "Name a dialog as namespace:name, like <white>server:shop</white> (a-z, 0-9, _ and -).");
+            return;
+        }
+        if (engine.all().containsKey(dialogId)) {
+            say(sender, "<white>" + dialogId + "</white> is a YAML dialog, so it is edited in its file. "
+                    + "Give a new name to draw one in the editor: <white>/de edit " + dialogId + "_drawn</white>");
             return;
         }
         String namespace = dialogId.substring(0, dialogId.indexOf(':'));
         String name = dialogId.substring(dialogId.indexOf(':') + 1);
-        File dialogs = new File(plugin.getDataFolder(), "dialogs");
-        Found found = find(dialogs, namespace, name);
-        boolean created = false;
-        if (found == null) {
-            if (engine.all().containsKey(dialogId)) {
-                say(sender, "<white>" + dialogId + "</white> belongs to another plugin, so it is edited there.");
+        String path = "drawn/" + namespace + "/" + name;
+        File dir = new File(plugin.getDataFolder(), path);
+        Map<String, Object> spec = null;
+        File specFile = new File(dir, "spec.json");
+        if (specFile.isFile()) {
+            try {
+                spec = GSON.fromJson(java.nio.file.Files.readString(specFile.toPath()), MAP);
+            } catch (Exception e) {
+                say(sender, "<red>" + path + "/spec.json could not be read: " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
                 return;
             }
-            found = create(dialogs, namespace, name);
-            if (found == null) {
-                say(sender, "Could not make a file for <white>" + dialogId + "</white>.");
-                return;
-            }
-            created = true;
         }
 
         EditWire.Open request = new EditWire.Open();
         request.client = "DialogEngine/" + plugin.getPluginMeta().getVersion();
         request.kind = "dialog";
         request.label = dialogId;
+        request.minecraftVersion = Bukkit.getMinecraftVersion();
         request.dialog = new EditWire.Dialog();
-        request.dialog.path = plugin.getDataFolder().toPath().relativize(found.file.toPath()).toString().replace('\\', '/');
-        request.dialog.key = found.key;
-        request.dialog.definition = toPlain(found.section);
+        request.dialog.path = path;
+        request.dialog.key = name;
+        request.dialog.spec = spec;
         String body = GSON.toJson(request);
         UUID opener = sender instanceof Player p ? p.getUniqueId() : null;
-        Found target = found;
-        boolean made = created;
-        say(sender, (made ? "Made <white>" + dialogId + "</white> and opening" : "Opening <white>" + dialogId + "</white>") + " in the editor...");
+        boolean fresh = spec == null;
+        say(sender, (fresh ? "Starting <white>" + dialogId + "</white>" : "Opening <white>" + dialogId + "</white>") + " in the dialog editor...");
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 EditWire.Opened opened = GSON.fromJson(request("POST", "/api/rpengine/session", body, null), EditWire.Opened.class);
-                sessions.put(opened.id, new Live(opened.id, opened.pullToken, parse(opened.expiresAt), target.file, target.key,
-                        dialogId, opener, opened.revision));
+                sessions.put(opened.id, new Live(opened.id, opened.pullToken, parse(opened.expiresAt), dir, name, dialogId, opener, opened.revision));
                 ensurePolling();
                 Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(Text.MM.deserialize(
                         "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>Edit <white>" + dialogId + "</white>: "
                                 + "<click:open_url:'" + opened.url + "'><hover:show_text:'Open the dialog editor'><#3670f8><u>open the editor</u></#3670f8></hover></click>"
-                                + "<dark_gray>. The link works once and lasts three hours; press Send to server to write it back.</dark_gray>")));
+                                + "<dark_gray>. The link works once and lasts three hours; press Send to server to bring it back here.</dark_gray>")));
             } catch (Exception e) {
                 Bukkit.getScheduler().runTask(plugin, () -> say(sender, "<red>Could not open the editor: " + Text.MM.escapeTags(String.valueOf(e.getMessage()))));
             }
         });
-    }
-
-    private record Found(File file, String key, ConfigurationSection section) {}
-
-    /** The file and key a dialog of the engine's own folder lives under, or null. */
-    private Found find(File dialogs, String namespace, String name) {
-        List<File> files = new ArrayList<>();
-        if (namespace.equals("server")) {
-            File[] top = dialogs.listFiles((dir, n) -> n.endsWith(".yml") || n.endsWith(".yaml"));
-            if (top != null) files.addAll(List.of(top));
-        }
-        collect(new File(dialogs, namespace), files);
-        for (File file : files) {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-            for (String key : yaml.getKeys(false)) {
-                if (key.toLowerCase(Locale.ROOT).equals(name) && yaml.isConfigurationSection(key)) {
-                    return new Found(file, key, yaml.getConfigurationSection(key));
-                }
-            }
-        }
-        return null;
-    }
-
-    private static void collect(File dir, List<File> out) {
-        File[] files = dir.listFiles();
-        if (files == null) return;
-        java.util.Arrays.sort(files);
-        for (File f : files) {
-            if (f.isDirectory()) collect(f, out);
-            else if (f.getName().endsWith(".yml") || f.getName().endsWith(".yaml")) out.add(f);
-        }
-    }
-
-    /** A new dialog in a file of its own: {@code dialogs/<namespace>/<name>.yml}. */
-    private Found create(File dialogs, String namespace, String name) {
-        File dir = namespace.equals("server") ? dialogs : new File(dialogs, namespace);
-        File file = new File(dir, name + ".yml");
-        if (file.exists()) return null;
-        YamlConfiguration yaml = new YamlConfiguration();
-        ConfigurationSection s = yaml.createSection(name);
-        s.set("title", "<gold><bold>" + name.substring(0, 1).toUpperCase(Locale.ROOT) + name.substring(1));
-        s.set("body", List.of("<gray>Made with /de edit. Change everything in the editor."));
-        Map<String, Object> button = new LinkedHashMap<>();
-        button.put("label", "<green>Okay");
-        button.put("actions", List.of("[message] <green>Clicked!", "[close]"));
-        s.set("buttons", List.of(button));
-        Map<String, Object> exit = new LinkedHashMap<>();
-        exit.put("label", "Close");
-        s.set("exit", exit);
-        try {
-            dir.mkdirs();
-            yaml.save(file);
-        } catch (IOException e) {
-            return null;
-        }
-        return new Found(file, name, yaml.getConfigurationSection(name));
     }
 
     // ------------------------------------------------------------------ polling
@@ -221,44 +171,53 @@ final class EditSessions {
         }
     }
 
-    /** Writes a pulled dialog back under its key, and reloads. On the main thread. */
+    /** Writes a pulled drawn dialog into its folder, and reloads. On the main thread. */
     private void apply(Live live, EditWire.Pull pull) {
         Player opener = live.opener == null ? null : Bukkit.getPlayer(live.opener);
         CommandSender tell = opener != null ? opener : Bukkit.getConsoleSender();
         String expected = plugin.getDataFolder().toPath().relativize(live.file.toPath()).toString().replace('\\', '/');
-        if (pull.dialog == null || pull.dialog.definition == null || !expected.equals(pull.dialog.path) || !live.key.equals(pull.dialog.key)) {
+        if (pull.dialog == null || pull.dialog.spec == null || pull.dialog.built == null || pull.dialog.built.isEmpty()
+                || !expected.equals(pull.dialog.path) || !live.key.equals(pull.dialog.key)) {
             say(tell, "<red>The editor sent back something for a different dialog; nothing was written.");
             return;
         }
+        java.nio.file.Path dir = live.file.toPath();
+        java.nio.file.Path pack = dir.resolve("pack");
         try {
-            YamlConfiguration yaml = new YamlConfiguration();
-            yaml.load(live.file);
-            // Comments hang off the keys they sit above, and replacing the
-            // section drops every one of them: kept for each line still there.
-            Map<String, List<String>> above = new LinkedHashMap<>();
-            Map<String, List<String>> inline = new LinkedHashMap<>();
-            List<String> paths = new ArrayList<>(List.of(live.key));
-            ConfigurationSection old = yaml.getConfigurationSection(live.key);
-            if (old != null) for (String sub : old.getKeys(true)) paths.add(live.key + "." + sub);
-            for (String path : paths) {
-                above.put(path, yaml.getComments(path));
-                inline.put(path, yaml.getInlineComments(path));
+            // Every file checked before anything is written: a path that leaves
+            // the dialog's own pack folder means nothing is.
+            Map<java.nio.file.Path, byte[]> files = new LinkedHashMap<>();
+            for (EditWire.File f : pull.files == null ? List.<EditWire.File>of() : pull.files) {
+                if (f.path == null || !f.path.startsWith("pack/") || !f.path.matches("[A-Za-z0-9._/\\-]+") || f.path.contains("..")) {
+                    throw new IOException("refused a file outside the dialog's pack: " + f.path);
+                }
+                java.nio.file.Path target = dir.resolve(f.path).normalize();
+                if (!target.startsWith(pack)) throw new IOException("refused " + f.path);
+                files.put(target, "base64".equals(f.encoding)
+                        ? java.util.Base64.getDecoder().decode(f.content)
+                        : f.content.getBytes(StandardCharsets.UTF_8));
             }
-            yaml.set(live.key, null);
-            yaml.createSection(live.key, wholeNumbers(pull.dialog.definition));
-            for (String path : paths) {
-                if (!yaml.contains(path)) continue;
-                if (!above.get(path).isEmpty()) yaml.setComments(path, above.get(path));
-                if (!inline.get(path).isEmpty()) yaml.setInlineComments(path, inline.get(path));
+            java.nio.file.Files.createDirectories(dir);
+            if (java.nio.file.Files.isDirectory(pack)) {
+                try (var walk = java.nio.file.Files.walk(pack)) {
+                    for (java.nio.file.Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.delete(p);
+                }
             }
-            yaml.save(live.file);
+            for (var e : files.entrySet()) {
+                java.nio.file.Files.createDirectories(e.getKey().getParent());
+                java.nio.file.Files.write(e.getKey(), e.getValue());
+            }
+            Gson pretty = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
+            java.nio.file.Files.writeString(dir.resolve("spec.json"), pretty.toJson(pull.dialog.spec));
+            java.nio.file.Files.writeString(dir.resolve("dialogs.json"), GSON.toJson(pull.dialog.built));
         } catch (Exception e) {
             say(tell, "<red>Could not write " + Text.MM.escapeTags(expected) + ": " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
             return;
         }
         sessions.computeIfPresent(live.id, (k, v) -> v.withApplied(pull.revision));
         engine.reload();
-        List<String> problems = engine.problems().stream().filter(p -> p.contains(live.dialogId) || p.contains(live.file.getName())).toList();
+        engine.drawnPack.sendAll();
+        List<String> problems = engine.drawn.problems.stream().filter(p -> p.contains(live.dialogId.replace(':', '/'))).toList();
         say(tell, "Saved <white>" + live.dialogId + "</white> from the editor"
                 + (problems.isEmpty() ? ". <click:run_command:'/de open " + live.dialogId + "'><#3670f8><u>Open it</u></#3670f8></click>" : ", with problems:"));
         for (String p : problems) tell.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
@@ -267,42 +226,6 @@ final class EditSessions {
     void shutdown() {
         if (poller != null) poller.cancel();
         sessions.clear();
-    }
-
-    // ------------------------------------------------------------------ JSON
-
-    /** A section as plain maps and lists, for Gson. */
-    private static Map<String, Object> toPlain(ConfigurationSection section) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (String key : section.getKeys(false)) out.put(key, plain(section.get(key)));
-        return out;
-    }
-
-    private static Object plain(Object value) {
-        if (value instanceof ConfigurationSection s) return toPlain(s);
-        if (value instanceof Map<?, ?> m) {
-            Map<String, Object> out = new LinkedHashMap<>();
-            m.forEach((k, v) -> out.put(String.valueOf(k), plain(v)));
-            return out;
-        }
-        if (value instanceof List<?> l) return l.stream().map(EditSessions::plain).toList();
-        return value;
-    }
-
-    /** Gson reads every number as a double; YAML wants {@code 2}, not {@code 2.0}. */
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> wholeNumbers(Map<String, Object> map) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        map.forEach((k, v) -> out.put(k, whole(v)));
-        return out;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Object whole(Object v) {
-        if (v instanceof Double d && d == Math.rint(d) && Math.abs(d) < 1e15) return d.longValue() == d.intValue() ? (Object) d.intValue() : (Object) d.longValue();
-        if (v instanceof Map<?, ?> m) return wholeNumbers((Map<String, Object>) m);
-        if (v instanceof List<?> l) return l.stream().map(EditSessions::whole).toList();
-        return v;
     }
 
     // ------------------------------------------------------------------ HTTP

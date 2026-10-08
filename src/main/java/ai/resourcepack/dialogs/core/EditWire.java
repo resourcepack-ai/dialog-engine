@@ -20,15 +20,24 @@ final class EditWire {
         String client;
         String kind;
         String label;
+        String minecraftVersion;
         Dialog dialog;
     }
 
-    /** One dialog: where it lives, its key there, and what is under that key. */
+    /** A drawn dialog: where it is kept, its name, Studio's spec, and (on a pull) every page as built. */
     static final class Dialog {
-        /** Relative to the plugin's folder: {@code dialogs/examples/welcome.yml}. */
+        /** Relative to the plugin's folder: {@code drawn/server/shop}. */
         String path;
         String key;
-        Map<String, Object> definition;
+        Map<String, Object> spec;
+        java.util.List<Map<String, Object>> built;
+    }
+
+    /** One file of the pack that draws it. */
+    static final class File {
+        String path;
+        String encoding;
+        String content;
     }
 
     /** The answer to opening one. */
@@ -55,6 +64,7 @@ final class EditWire {
         String id;
         String kind;
         long revision;
+        java.util.List<File> files;
         Dialog dialog;
     }
 }
