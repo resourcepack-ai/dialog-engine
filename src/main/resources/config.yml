@@ -38,3 +38,9 @@ messages:
   too-short: "{label} needs at least {min} characters."
   invalid: "{label} isn't valid."
   link: "<gray>Open: <aqua><u>{url}</u></aqua>"
+
+# /de edit <id> opens a dialog in the dialog editor at resourcepack.ai, in the
+# browser, with no account. Pressing "Send to server" there writes it back into
+# its file here and reloads. Only what you edit is sent: that one dialog.
+edit:
+  url: "https://studio.resourcepack.ai"

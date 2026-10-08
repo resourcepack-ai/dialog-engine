@@ -38,6 +38,15 @@ public final class AdminCommand implements TabExecutor {
                         + (problems.isEmpty() ? "." : ", with <yellow>" + problems.size() + "</yellow> problems:"));
                 for (String p : problems) sender.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
             }
+            case "edit" -> {
+                if (args.length < 2) {
+                    say(sender, "/de edit <namespace:id> <dark_gray>·</dark_gray> opens it in the dialog editor in your browser; a name that is not there yet is made.");
+                    return true;
+                }
+                String id = args[1].toLowerCase(Locale.ROOT);
+                if (!id.contains(":")) id = "server:" + id;
+                engine.edits().open(sender, id);
+            }
             case "list" -> {
                 Map<String, List<String>> byNamespace = new LinkedHashMap<>();
                 for (DialogDef d : engine.all().values()) {
@@ -99,7 +108,7 @@ public final class AdminCommand implements TabExecutor {
                         + (d.args().isEmpty() ? "" : ", args " + String.join(" ", d.args()))));
             }
             default -> {
-                say(sender, "<white>/de list</white> <dark_gray>·</dark_gray> <white>/de open <id> [player] [key=value]</white> <dark_gray>·</dark_gray> <white>/de info <id></white> <dark_gray>·</dark_gray> <white>/de reload</white>");
+                say(sender, "<white>/de list</white> <dark_gray>·</dark_gray> <white>/de open <id> [player] [key=value]</white> <dark_gray>·</dark_gray> <white>/de info <id></white> <dark_gray>·</dark_gray> <white>/de edit <id></white> <dark_gray>·</dark_gray> <white>/de reload</white>");
             }
         }
         return true;
@@ -109,8 +118,8 @@ public final class AdminCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
-            for (String s : List.of("list", "open", "info", "reload")) if (s.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(s);
-        } else if (args.length == 2 && (args[0].equalsIgnoreCase("open") || args[0].equalsIgnoreCase("info"))) {
+            for (String s : List.of("list", "open", "info", "edit", "reload")) if (s.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(s);
+        } else if (args.length == 2 && (args[0].equalsIgnoreCase("open") || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("edit"))) {
             for (String id : engine.ids()) if (id.startsWith(args[1].toLowerCase(Locale.ROOT))) out.add(id);
         } else if (args.length == 3 && args[0].equalsIgnoreCase("open")) {
             for (Player p : Bukkit.getOnlinePlayers()) if (p.getName().toLowerCase(Locale.ROOT).startsWith(args[2].toLowerCase(Locale.ROOT))) out.add(p.getName());

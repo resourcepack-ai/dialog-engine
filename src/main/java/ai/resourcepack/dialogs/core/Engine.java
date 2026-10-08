@@ -200,7 +200,16 @@ public final class Engine implements DialogEngineAPI {
         return namespace + ":" + trimmed;
     }
 
+    private EditSessions edits;
+
+    /** {@code /de edit}'s sessions, made on first use. */
+    synchronized EditSessions edits() {
+        if (edits == null) edits = new EditSessions(this);
+        return edits;
+    }
+
     public void shutdown() {
+        if (edits != null) edits.shutdown();
         commands.clear();
         sessions.clear();
     }
