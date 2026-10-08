@@ -25,6 +25,11 @@ default-after: wait
 # closing it. In ticks; 20 is a second.
 close-delay-ticks: 10
 
+# The sound a click on a drawn dialog makes: the game's own button click, which
+# a click on a picture does not make by itself. Blank for none. (Plain YAML
+# dialogs are the game's own buttons, which click by themselves.)
+click-sound: "ui.button.click"
+
 # How a failed input check is shown, when the dialog's body does not print
 # {error} itself. MiniMessage.
 validation-format: "<red>⚠ {error}"

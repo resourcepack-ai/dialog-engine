@@ -98,17 +98,13 @@ final class EditSessions {
         String name = dialogId.substring(dialogId.indexOf(':') + 1);
         String path = "drawn/" + namespace + "/" + name;
         File dir = new File(plugin.getDataFolder(), path);
-        Map<String, Object> spec = null;
-        File specFile = new File(dir, "spec.json");
-        if (specFile.isFile()) {
-            try {
-                spec = GSON.fromJson(java.nio.file.Files.readString(specFile.toPath()), MAP);
-            } catch (Exception e) {
-                say(sender, "<red>" + path + "/spec.json could not be read: " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
-                return;
-            }
+        Map<String, Object> spec;
+        try {
+            spec = DrawnFiles.read(dir.toPath());
+        } catch (Exception e) {
+            say(sender, "<red>" + path + "/" + DrawnFiles.SOURCE + " could not be read: " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
+            return;
         }
-
         EditWire.Open request = new EditWire.Open();
         request.client = "DialogEngine/" + plugin.getPluginMeta().getVersion();
         request.kind = "dialog";
@@ -181,35 +177,8 @@ final class EditSessions {
             say(tell, "<red>The editor sent back something for a different dialog; nothing was written.");
             return;
         }
-        java.nio.file.Path dir = live.file.toPath();
-        java.nio.file.Path pack = dir.resolve("pack");
         try {
-            // Every file checked before anything is written: a path that leaves
-            // the dialog's own pack folder means nothing is.
-            Map<java.nio.file.Path, byte[]> files = new LinkedHashMap<>();
-            for (EditWire.File f : pull.files == null ? List.<EditWire.File>of() : pull.files) {
-                if (f.path == null || !f.path.startsWith("pack/") || !f.path.matches("[A-Za-z0-9._/\\-]+") || f.path.contains("..")) {
-                    throw new IOException("refused a file outside the dialog's pack: " + f.path);
-                }
-                java.nio.file.Path target = dir.resolve(f.path).normalize();
-                if (!target.startsWith(pack)) throw new IOException("refused " + f.path);
-                files.put(target, "base64".equals(f.encoding)
-                        ? java.util.Base64.getDecoder().decode(f.content)
-                        : f.content.getBytes(StandardCharsets.UTF_8));
-            }
-            java.nio.file.Files.createDirectories(dir);
-            if (java.nio.file.Files.isDirectory(pack)) {
-                try (var walk = java.nio.file.Files.walk(pack)) {
-                    for (java.nio.file.Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.delete(p);
-                }
-            }
-            for (var e : files.entrySet()) {
-                java.nio.file.Files.createDirectories(e.getKey().getParent());
-                java.nio.file.Files.write(e.getKey(), e.getValue());
-            }
-            Gson pretty = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
-            java.nio.file.Files.writeString(dir.resolve("spec.json"), pretty.toJson(pull.dialog.spec));
-            java.nio.file.Files.writeString(dir.resolve("dialogs.json"), GSON.toJson(pull.dialog.built));
+            DrawnFiles.writeDrawing(live.file.toPath(), pull, true);
         } catch (Exception e) {
             say(tell, "<red>Could not write " + Text.MM.escapeTags(expected) + ": " + Text.MM.escapeTags(String.valueOf(e.getMessage())));
             return;
@@ -221,6 +190,54 @@ final class EditSessions {
         say(tell, "Saved <white>" + live.dialogId + "</white> from the editor"
                 + (problems.isEmpty() ? ". <click:run_command:'/de open " + live.dialogId + "'><#3670f8><u>Open it</u></#3670f8></click>" : ", with problems:"));
         for (String p : problems) tell.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
+    }
+
+    // ------------------------------------------------------------------ redrawing
+
+    /**
+     * Redraws a drawn dialog whose {@code dialog.yml} was edited by hand: the
+     * document goes to Studio, which draws it as its editor would and answers
+     * with what a pull would have been. Off the main thread; {@code done} runs
+     * on it, with null on success or why it failed.
+     */
+    void redraw(String dialogId, File dir, java.util.function.Consumer<String> done) {
+        Map<String, Object> spec;
+        try {
+            spec = DrawnFiles.read(dir.toPath());
+        } catch (Exception e) {
+            done.accept(DrawnFiles.SOURCE + " could not be read: " + e.getMessage());
+            return;
+        }
+        if (spec == null) {
+            done.accept("there is no " + DrawnFiles.SOURCE);
+            return;
+        }
+        String name = dialogId.substring(dialogId.indexOf(':') + 1);
+        String path = plugin.getDataFolder().toPath().relativize(dir.toPath()).toString().replace('\\', '/');
+        EditWire.Open request = new EditWire.Open();
+        request.client = "DialogEngine/" + plugin.getPluginMeta().getVersion();
+        request.kind = "dialog";
+        request.label = dialogId;
+        request.minecraftVersion = Bukkit.getMinecraftVersion();
+        request.dialog = new EditWire.Dialog();
+        request.dialog.path = path;
+        request.dialog.key = name;
+        request.dialog.spec = spec;
+        String body = GSON.toJson(request);
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            String error = null;
+            try {
+                EditWire.Pull pull = GSON.fromJson(request("POST", "/api/rpengine/build", body, null), EditWire.Pull.class);
+                if (pull.dialog == null || pull.dialog.built == null || pull.dialog.built.isEmpty()) throw new IOException("Studio drew nothing");
+                DrawnFiles.writeDrawing(dir.toPath(), pull, false);
+            } catch (Gone gone) {
+                error = "this Studio cannot redraw dialogs yet";
+            } catch (Exception e) {
+                error = String.valueOf(e.getMessage());
+            }
+            String result = error;
+            Bukkit.getScheduler().runTask(plugin, () -> done.accept(result));
+        });
     }
 
     void shutdown() {

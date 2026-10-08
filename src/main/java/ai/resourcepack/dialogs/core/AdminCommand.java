@@ -32,11 +32,14 @@ public final class AdminCommand implements TabExecutor {
         String sub = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
         switch (sub) {
             case "reload" -> {
+                engine.drawn.notifyNext(sender);
                 engine.reload();
                 List<String> problems = engine.problems();
                 say(sender, "Loaded <white>" + engine.ids().size() + "</white> dialogs"
                         + (problems.isEmpty() ? "." : ", with <yellow>" + problems.size() + "</yellow> problems:"));
                 for (String p : problems) sender.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
+                int stale = engine.drawn.staleCount();
+                if (stale > 0) say(sender, "Redrawing <white>" + stale + "</white> drawn dialog" + (stale == 1 ? "" : "s") + " edited by hand...");
             }
             case "edit" -> {
                 if (args.length < 2) {
@@ -105,7 +108,7 @@ public final class AdminCommand implements TabExecutor {
                     return true;
                 }
                 if (engine.drawn.has(id)) {
-                    if (!engine.drawn.open(target, id, values)) say(sender, "<red>It did not open; the console says why.");
+                    if (!engine.drawn.open(target, id, values, values.keySet())) say(sender, "<red>It did not open; the console says why.");
                     return true;
                 }
                 // Typed by staff, but still typed: escape it where it is printed.

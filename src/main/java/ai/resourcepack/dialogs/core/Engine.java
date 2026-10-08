@@ -140,6 +140,7 @@ public final class Engine implements DialogEngineAPI {
         drawn.load();
         for (String p : drawn.problems) plugin.getLogger().warning(p);
         drawnPack.build(drawn.folder());
+        drawn.redrawStale();
         return problems;
     }
 
@@ -254,6 +255,15 @@ public final class Engine implements DialogEngineAPI {
 
     /** Draws a session's dialog. The one place a dialog reaches a player. */
     boolean show(Player player, Session session, boolean reopened) {
+        if (drawn.has(session.dialogId)) {
+            if (!player.isOnline()) return false;
+            DialogOpenEvent event = new DialogOpenEvent(player, session.dialogId, session.values, reopened);
+            Bukkit.getPluginManager().callEvent(event);
+            if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;
+            sessions.put(player.getUniqueId(), session);
+            shown.merge(player.getUniqueId(), 1L, Long::sum);
+            return true;
+        }
         DialogDef def = dialogs.get(session.dialogId);
         if (def == null || !player.isOnline()) return false;
         def.defaults().forEach(session.values::putIfAbsent);
@@ -295,6 +305,7 @@ public final class Engine implements DialogEngineAPI {
     /** Opens a dialog the way a player asked for it: with the permission check, and with their words untrusted. */
     boolean openAsPlayer(Player player, String id, Map<String, String> values, Set<String> untrusted, Session previous) {
         DialogDef def = dialogs.get(id);
+        if (def == null && drawn.has(id)) def = drawn.get(id).map(DrawnDialogs.Drawn::def).orElse(null);
         if (def == null) {
             player.sendMessage(Text.MM.deserialize(message("unknown-dialog", "<red>There is no dialog called {id}.").replace("{id}", Text.MM.escapeTags(id))));
             return false;
@@ -452,6 +463,11 @@ public final class Engine implements DialogEngineAPI {
         return h == null ? null : h.value();
     }
 
+    /** Runs an action list, as a button's. */
+    void run(ClickCtx ctx, List<String> list) {
+        actions.run(ctx, list, 0);
+    }
+
     void remember(Player player, Session session) {
         sessions.put(player.getUniqueId(), session);
     }
@@ -466,7 +482,7 @@ public final class Engine implements DialogEngineAPI {
     public boolean open(Player player, String dialogId, Map<String, String> values) {
         if (player == null || !player.isOnline()) return false;
         String id = dialogId.toLowerCase(Locale.ROOT);
-        if (drawn.has(id)) return drawn.open(player, id, values);
+        if (drawn.has(id)) return drawn.open(player, id, values, Set.of());
         if (!dialogs.containsKey(id)) return false;
         return show(player, new Session(player.getUniqueId(), id, values == null ? Map.of() : values, Set.of(), null), false);
     }
