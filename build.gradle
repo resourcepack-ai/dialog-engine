@@ -21,8 +21,19 @@ tasks.withType(JavaCompile).configureEach {
 repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
-    // ai.resourcepack:common, our own shared plugin library.
-    maven { url = 'https://repo.resourcepack.ai' }
+    // ai.resourcepack:common, our own shared plugin library. Exclusive: the
+    // ai.resourcepack group is looked for here and nowhere else, so a
+    // look-alike published to Central or any repository above cannot stand in
+    // for it. (A checkout with ../plugin-common builds it from source instead;
+    // see settings.gradle.)
+    exclusiveContent {
+        forRepository {
+            maven { url = 'https://repo.resourcepack.ai' }
+        }
+        filter {
+            includeGroup 'ai.resourcepack'
+        }
+    }
 }
 
 dependencies {
