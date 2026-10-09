@@ -1,1 +1,7 @@
 rootProject.name = 'dialog-engine'
+
+// ai.resourcepack:common, the small library our plugins shade in, built from
+// source beside this one rather than fetched from repo.resourcepack.ai.
+if (file('../plugin-common').isDirectory()) {
+    includeBuild('../plugin-common')
+}

@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'com.gradleup.shadow' version '8.3.5'
 }
 
 group = 'ai.resourcepack'
@@ -20,10 +21,31 @@ tasks.withType(JavaCompile).configureEach {
 repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    // ai.resourcepack:common, our own shared plugin library.
+    maven { url = 'https://repo.resourcepack.ai' }
 }
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT'
+
+    // The small library every ResourcePack AI plugin shades in (the update
+    // check, for one), relocated below so it never meets another plugin's copy.
+    implementation 'ai.resourcepack:common:0.1.0'
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    relocate 'ai.resourcepack.common', 'ai.resourcepack.dialogs.libs.common'
+}
+
+// The shaded jar is the plugin; the plain one would only be a second file in
+// build/libs with the same name.
+jar {
+    enabled = false
+}
+
+build {
+    dependsOn shadowJar
 }
 
 processResources {

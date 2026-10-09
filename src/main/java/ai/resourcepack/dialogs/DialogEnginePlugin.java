@@ -25,6 +25,11 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
     private Engine engine;
 
+    /** This plugin's SpigotMC resource id: the number in its page's URL. */
+    private static final int SPIGOT_RESOURCE = 139452;
+
+    private ai.resourcepack.common.update.UpdateCheck updates;
+
     @Override
     public void onEnable() {
         try {
@@ -66,10 +71,22 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         }
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("Loaded " + engine.ids().size() + " dialogs.");
+
+        updates = ai.resourcepack.common.update.UpdateCheck.spigot(this, SPIGOT_RESOURCE)
+                .name("Dialog Engine")
+                .permission("dialogengine.update")
+                .enabledWhen(() -> getConfig().getBoolean("update-check", true))
+                .player((player, update) -> player.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage
+                        .miniMessage().deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> "
+                                + "<gray>Dialog Engine <#3670f8>" + update.latest() + "</#3670f8> is out (you have "
+                                + update.running() + "). <#3670f8><u><click:open_url:'" + update.url()
+                                + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>")))
+                .start();
     }
 
     @Override
     public void onDisable() {
+        if (updates != null) updates.stop();
         if (engine != null) engine.shutdown();
         DialogEngine.set(null);
     }

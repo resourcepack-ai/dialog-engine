@@ -22,3 +22,6 @@ permissions:
   dialogengine.samples:
     description: Open the sample dialogs in dialogs/samples/.
     default: op
+  dialogengine.update:
+    description: Be told on joining when a newer Dialog Engine is on SpigotMC.
+    default: op
