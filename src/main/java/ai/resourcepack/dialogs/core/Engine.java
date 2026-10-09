@@ -338,7 +338,12 @@ public final class Engine implements DialogEngineAPI {
             String v = null;
             if (view != null) {
                 switch (in.kind()) {
-                    case TEXT -> v = view.getText(key);
+                    case TEXT -> {
+                        // The client enforces max-length, so a modified one need not:
+                        // clip here, before validation, actions or a pattern see it.
+                        v = view.getText(key);
+                        if (v != null && v.length() > in.maxLength()) v = v.substring(0, in.maxLength());
+                    }
                     case OPTIONS -> {
                         v = view.getText(key);
                         Map<String, String> labels = optionLabels.getOrDefault(key, Map.of());
