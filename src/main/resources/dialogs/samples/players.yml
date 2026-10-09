@@ -1,7 +1,7 @@
-# examples:players - a button per online player, eight to a page, each one
-# opening a dialog about that player. Open it with /players.
+# samples:players - a button per online player, eight to a page, each one
+# opening a dialog about that player. Open it with /de open samples:players
 players:
-  command: players
+  permission: dialogengine.samples
   title: "Online <dark_gray>({online})"
   columns: 2
   body:
@@ -26,6 +26,7 @@ players:
     label: "Close"
 
 player_card:
+  permission: dialogengine.samples
   title: "{target}"
   body:
     - head: "{target}"

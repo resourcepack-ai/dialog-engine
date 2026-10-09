@@ -1,0 +1,45 @@
+# samples:rules - the rules, with Accept and Decline. Declining asks again
+# before doing anything. Open it with /de open samples:rules
+#
+# On a real server, Accept might run "[console] lp user {player} permission set
+# server.rules.accepted" and Decline "[console] kick {player} You need to accept
+# the rules to play."
+rules:
+  permission: dialogengine.samples
+  title: "<gold><bold>Server rules"
+  escape: false
+  body:
+    - text:
+        - "<white>1.</white> <gray>Be kind. No harassment, slurs or spam."
+        - "<white>2.</white> <gray>No cheats, x-ray or duping."
+        - "<white>3.</white> <gray>Don't grief or steal from builds that aren't yours."
+        - "<white>4.</white> <gray>Keep chat in English, and keep it friendly."
+        - "<white>5.</white> <gray>Staff have the final say."
+      width: 260
+    - "<dark_gray>Breaking these can get you muted or banned."
+  buttons:
+    - label: "<green>I accept"
+      actions:
+        - "[message] <green>Thanks, {player}. Have fun!"
+        - "[sound] entity.player.levelup 1 1.2"
+        - "[close]"
+    - label: "<red>Decline"
+      actions:
+        - "[open] rules_decline"
+
+rules_decline:
+  permission: dialogengine.samples
+  title: "Decline the rules?"
+  type: confirmation
+  escape: false
+  body:
+    - "<gray>You can't play here without accepting them."
+  confirm:
+    label: "<red>Leave"
+    actions:
+      - "[message] <red>In a real setup this would disconnect you."
+      - "[close]"
+  cancel:
+    label: "Read them again"
+    actions:
+      - "[back]"

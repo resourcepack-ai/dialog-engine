@@ -1,7 +1,7 @@
-# examples:settings - every kind of input, a check on one of them, and a
-# confirmation page that carries the values over. Open it with /de open examples:settings
+# samples:settings - every kind of input, a check on one of them, and a
+# confirmation page that carries the values over. Open it with /de open samples:settings
 settings:
-  command: dialog-settings
+  permission: dialogengine.samples
   title: "Settings"
   columns: 2
   body:
@@ -50,6 +50,7 @@ settings:
         - "[close]"
 
 settings_confirm:
+  permission: dialogengine.samples
   title: "Save these?"
   type: confirmation
   body:
@@ -58,7 +59,7 @@ settings_confirm:
         - "<gray>Colour: <white>{colour.label}"
         - "<gray>Volume: <white>{volume}%"
         - "<gray>Friend alerts: <white>{notify?true:on|off}"
-        - "{bio?:|<gray>About: <white>$value}"
+        - "{bio?:|<gray>About you <dark_gray>·</dark_gray> <white>$value}"
   confirm:
     label: "<green>Save"
     actions:

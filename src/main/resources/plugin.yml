@@ -19,3 +19,6 @@ permissions:
   dialogengine.admin:
     description: Use /dialogengine (list, open dialogs on anybody, reload).
     default: op
+  dialogengine.samples:
+    description: Open the sample dialogs in dialogs/samples/.
+    default: op

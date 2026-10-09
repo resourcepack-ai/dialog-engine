@@ -1,0 +1,87 @@
+# samples:report - report a player. "/report Steve" fills in who; plain
+# "/report" asks first. The details box has to be filled in, and Send asks
+# again before anything happens.
+#
+# The command is /sample-report so it stays out of the way of a real /report.
+# With a staff plugin, Send might run "[console] staffchat {player} reported
+# {target} for {reason.label}: {details}".
+report:
+  command: sample-report
+  permission: dialogengine.samples
+  args: [target]
+  if-missing: report_pick
+  title: "Report <red>{target}"
+  body:
+    - head: "{target}"
+      width: 24
+      height: 24
+      description: "<gray>Tell us what <white>{target}</white> did. Staff will look at it soon."
+  inputs:
+    - key: reason
+      type: options
+      label: "Reason"
+      width: 220
+      options:
+        - { id: cheating, text: "Cheating", initial: true }
+        - { id: chat, text: "Chat abuse" }
+        - { id: grief, text: "Griefing" }
+        - { id: other, text: "Something else" }
+    - key: details
+      type: text
+      label: "What happened?"
+      width: 220
+      lines: 3
+      height: 48
+      max-length: 200
+      required: true
+      min-length: 10
+      error: "Tell us a little more: at least 10 characters."
+  buttons:
+    - label: "<red>Send"
+      actions:
+        - "[open] report_confirm"
+    - label: "Cancel"
+      validate: false
+      actions:
+        - "[close]"
+
+report_pick:
+  permission: dialogengine.samples
+  title: "Who are you reporting?"
+  columns: 2
+  body:
+    - "<gray>Page {page} of {pages}"
+  buttons:
+    - for-each: other_players
+      per-page: 8
+      label: "{row.name}"
+      actions:
+        - "[open] report target={row.name}"
+    - label: "<gray>← Previous"
+      if: "{has_prev}"
+      actions: ["[page] prev"]
+    - label: "<gray>Next →"
+      if: "{has_next}"
+      actions: ["[page] next"]
+  exit:
+    label: "Cancel"
+
+report_confirm:
+  permission: dialogengine.samples
+  title: "Send this report?"
+  type: confirmation
+  body:
+    - text:
+        - "<gray>Player: <white>{target}"
+        - "<gray>Reason: <white>{reason.label}"
+        - "<gray>Details: <white>{details}"
+      width: 260
+  confirm:
+    label: "<red>Send"
+    actions:
+      - "[message] <green>Thanks. Your report on {target} was sent. <gray>(A sample: it went nowhere.)"
+      - "[close]"
+  cancel:
+    label: "Edit"
+    actions:
+      - "[back]"

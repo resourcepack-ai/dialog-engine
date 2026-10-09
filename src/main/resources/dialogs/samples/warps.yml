@@ -1,0 +1,28 @@
+# samples:warps - a list written in the YAML, a button per row. Open it with
+# /de open samples:warps
+#
+# Swap the [message] for your warp command, e.g. "[player] warp {row.id}".
+warps:
+  permission: dialogengine.samples
+  title: "<green><bold>Warps"
+  columns: 2
+  body:
+    - "<gray>Where to?"
+  lists:
+    places:
+      - { id: spawn, name: "Spawn", about: "Where everyone starts" }
+      - { id: shops, name: "<gold>Market", about: "Player shops" }
+      - { id: arena, name: "<red>Arena", about: "PvP, keep inventory off" }
+      - { id: farms, name: "<green>Farms", about: "Public crop and mob farms" }
+      - { id: end, name: "<light_purple>End portal", about: "Bring pearls" }
+      - { id: build, name: "<aqua>Build contest", about: "This month: lighthouses" }
+  buttons:
+    - for-each: places
+      label: "{row.name}"
+      tooltip: "{row.about}"
+      actions:
+        - "[message] <gray>Off to <white>{row.name}</white>. <dark_gray>(A sample: swap this for your warp command.)"
+        - "[sound] entity.enderman.teleport"
+        - "[close]"
+  exit:
+    label: "Close"

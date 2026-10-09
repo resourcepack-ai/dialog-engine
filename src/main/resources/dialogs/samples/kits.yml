@@ -1,0 +1,48 @@
+# samples:kits - item pictures with names and lore, and a button that only
+# players with a permission see. Open it with /de open samples:kits
+#
+# On a real server, a kit's button would run "[player] kit starter" or give the
+# items with "[console] give {player} ...".
+kits:
+  permission: dialogengine.samples
+  title: "<aqua><bold>Kits"
+  body:
+    - item: stone_sword
+      name: "<white>Starter"
+      lore:
+        - "<gray>A stone sword, bread and torches"
+      description: "<white>Starter</white> <dark_gray>·</dark_gray> <gray>everyone, once a day"
+    - item: iron_pickaxe
+      name: "<white>Miner"
+      lore:
+        - "<gray>An iron pickaxe and a stack of torches"
+      description: "<white>Miner</white> <dark_gray>·</dark_gray> <gray>once a week"
+    - item: netherite_chestplate
+      name: "<light_purple>VIP"
+      glow: true
+      lore:
+        - "<gray>Full netherite, for supporters"
+      description: "<light_purple>VIP</light_purple> <dark_gray>·</dark_gray> <gray>needs <white>server.kit.vip"
+  columns: 3
+  buttons:
+    - label: "Starter"
+      width: 100
+      actions:
+        - "[message] <green>Here's your Starter kit. <gray>(A sample: nothing was given.)"
+        - "[sound] entity.item.pickup"
+        - "[close]"
+    - label: "Miner"
+      width: 100
+      actions:
+        - "[message] <green>Here's your Miner kit. <gray>(A sample: nothing was given.)"
+        - "[sound] entity.item.pickup"
+        - "[close]"
+    - label: "<light_purple>VIP"
+      width: 100
+      permission: server.kit.vip
+      actions:
+        - "[message] <light_purple>Here's your VIP kit. <gray>(A sample: nothing was given.)"
+        - "[sound] entity.item.pickup"
+        - "[close]"
+  exit:
+    label: "Close"

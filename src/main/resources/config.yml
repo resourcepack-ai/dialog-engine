@@ -1,11 +1,17 @@
 # Dialog Engine
 #
 # Dialogs live in dialogs/. Every folder in there is a namespace: a dialog
-# called "welcome" in dialogs/examples/menus.yml is examples:welcome. Files
+# called "welcome" in dialogs/samples/menus.yml is samples:welcome. Files
 # sitting directly in dialogs/ are in the namespace "server". Other plugins
 # keep theirs in their own folders and hand them to the engine.
 #
 # /de reload reads everything again. /de list shows what loaded.
+
+# Write the sample dialogs into dialogs/samples/ when that folder is missing
+# (so on the first start). /dialog-samples opens a menu of them; only players
+# with dialogengine.samples (ops) can open them. Set this to false and delete
+# the folder to be rid of them for good.
+samples: true
 
 # How long a dialog's buttons keep working after it is drawn, in minutes.
 # A player who leaves a dialog open longer than this and then clicks gets

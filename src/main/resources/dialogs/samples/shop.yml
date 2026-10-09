@@ -1,0 +1,61 @@
+# samples:shop - pick an item and how many, then confirm. Open it with
+# /de open samples:shop
+#
+# Nothing is bought here. With an economy plugin, Buy would run something like
+#   "[console] eco take {player} {total}"
+#   "[console] give {player} {item} {amount}"
+shop:
+  permission: dialogengine.samples
+  title: "<gold><bold>Shop"
+  body:
+    - item: diamond
+      name: "<aqua>Diamond"
+      description: "<gray>Diamond <dark_gray>·</dark_gray> <white>100</white> coins each"
+    - item: golden_apple
+      name: "<gold>Golden apple"
+      description: "<gray>Golden apple <dark_gray>·</dark_gray> <white>40</white> coins each"
+    - item: ender_pearl
+      name: "<dark_aqua>Ender pearl"
+      description: "<gray>Ender pearl <dark_gray>·</dark_gray> <white>25</white> coins each"
+  inputs:
+    - key: item
+      type: options
+      label: "Item"
+      width: 200
+      options:
+        - { id: diamond, text: "Diamond", initial: true }
+        - { id: golden_apple, text: "Golden apple" }
+        - { id: ender_pearl, text: "Ender pearl" }
+    - key: amount
+      type: slider
+      label: "How many"
+      width: 200
+      min: 1
+      max: 64
+      step: 1
+      initial: 8
+  buttons:
+    - label: "<green>Buy"
+      tooltip: "Check the order first"
+      actions:
+        - "[open] shop_confirm"
+  exit:
+    label: "Close"
+
+shop_confirm:
+  permission: dialogengine.samples
+  title: "Buy this?"
+  type: confirmation
+  body:
+    - item: "{item}"
+      description: "<white>{amount} × {item.label}"
+  confirm:
+    label: "<green>Buy"
+    actions:
+      - "[message] <green>You bought {amount} × {item.label}. <gray>(A sample: nothing was taken or given.)"
+      - "[sound] entity.villager.yes"
+      - "[close]"
+  cancel:
+    label: "Back"
+    actions:
+      - "[back]"

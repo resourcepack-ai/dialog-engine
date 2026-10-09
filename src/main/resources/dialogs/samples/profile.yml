@@ -1,0 +1,31 @@
+# samples:profile - the player's own stats, from the built-in placeholders, and
+# a button that only shows in creative. Open it with /de open samples:profile
+#
+# With PlaceholderAPI installed, any %placeholder% works here too, e.g.
+# %vault_eco_balance% or %statistic_deaths%.
+profile:
+  permission: dialogengine.samples
+  title: "<white><bold>{player}"
+  body:
+    - head: "{player}"
+      width: 48
+      height: 48
+      description: "<gray>Level <white>{player_level}</white> <dark_gray>·</dark_gray> <red>❤ {player_health}"
+    - text:
+        - "<gray>World: <white>{player_world}"
+        - "<gray>Standing at: <white>{player_x}, {player_y}, {player_z}"
+        - "<gray>Game mode: <white>{player_gamemode?survival:Survival|creative:Creative|adventure:Adventure|spectator:Spectator|$value}"
+    - text: "<gold>You're in creative, so the button below shows."
+      if: "{player_gamemode} == creative"
+  buttons:
+    - label: "Copy my position"
+      tooltip: "Puts it on your clipboard"
+      actions:
+        - "[copy] {player_x} {player_y} {player_z}"
+    - label: "<gold>Back to survival"
+      if: "{player_gamemode} == creative"
+      actions:
+        - "[player] gamemode survival"
+        - "[refresh]"
+  exit:
+    label: "Close"

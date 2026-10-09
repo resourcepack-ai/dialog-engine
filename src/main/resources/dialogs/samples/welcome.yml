@@ -1,6 +1,7 @@
-# examples:welcome - a notice with a picture and a link. Open it with /welcome.
+# samples:welcome - a notice with the player's head and one button.
+# Open it with /de open samples:welcome
 welcome:
-  command: welcome
+  permission: dialogengine.samples
   title: "<#3670f8><bold>Welcome</bold></#3670f8>"
   body:
     - head: "{player}"
@@ -8,10 +9,9 @@ welcome:
       height: 32
       description: "<gray>Good to see you, <white>{player}</white>."
     - text:
-        - "There are <white>{online}</white> of us online right now."
+        - "<gray>Players online: <white>{online}"
         - ""
-        - "<gray>This is a Dialog Engine example. Edit it in"
-        - "<gray>plugins/DialogEngine/dialogs/examples/welcome.yml"
+        - "<gray>Edit this in plugins/DialogEngine/dialogs/samples/welcome.yml"
   buttons:
     - label: "<green>Let's go"
       tooltip: "Close this and play"

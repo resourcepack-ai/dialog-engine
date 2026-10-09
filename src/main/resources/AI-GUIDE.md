@@ -36,17 +36,21 @@ server and run `/de reload`.
 - Prefer one dialog per job, linked with `[open]` and `[back]`, over one huge
   screen.
 
-## Examples shipped with the plugin
+## Samples shipped with the plugin
 
-`plugins/DialogEngine/dialogs/examples/` holds three working dialogs: a
-welcome screen, a settings page with every input type and a check, and a paged
-list of online players. Read them before writing your first one.
+`plugins/DialogEngine/dialogs/samples/` holds working dialogs, one file each: a
+welcome notice, server rules with a confirmation, a shop with a dropdown and a
+slider, kits with item pictures and a permission button, warps from a list in
+the YAML, a paged list of online players, a profile built from placeholders
+and conditions, a report form with arguments and checks, and a settings page
+with every input type. Read the nearest one before writing your own. (They are
+missing if the server owner set `samples: false`.)
 
 ## The format
 
 Every folder in `dialogs/` is a namespace, and every key in a `.yml` file in
-it is a dialog: `welcome` in `dialogs/examples/menus.yml` is
-`examples:welcome`. Files sitting directly in `dialogs/` are in the namespace
+it is a dialog: `welcome` in `dialogs/samples/menus.yml` is
+`samples:welcome`. Files sitting directly in `dialogs/` are in the namespace
 `server`. Text is [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
 
 ```yaml

@@ -19,7 +19,9 @@ import java.util.List;
  */
 public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
-    private static final List<String> EXAMPLES = List.of("welcome.yml", "settings.yml", "players.yml");
+    /** The sample dialogs, written into dialogs/samples/ unless config.yml says samples: false. */
+    private static final List<String> SAMPLES = List.of("index.yml", "welcome.yml", "rules.yml", "shop.yml",
+            "kits.yml", "warps.yml", "players.yml", "profile.yml", "report.yml", "settings.yml");
 
     private Engine engine;
 
@@ -36,9 +38,12 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         // The format, written for an AI agent to read. Replaced on every start,
         // so it always describes the version that is running.
         saveResource("AI-GUIDE.md", true);
-        File dialogs = new File(getDataFolder(), "dialogs");
-        if (!dialogs.exists()) {
-            for (String name : EXAMPLES) saveResource("dialogs/examples/" + name, false);
+        // The samples are written once, when their folder is missing: deleting
+        // one file keeps it deleted, deleting the folder brings them all back
+        // unless samples: false.
+        File samples = new File(getDataFolder(), "dialogs/samples");
+        if (getConfig().getBoolean("samples", true) && !samples.exists()) {
+            for (String name : SAMPLES) saveResource("dialogs/samples/" + name, false);
         }
 
         engine = new Engine(this);

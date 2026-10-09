@@ -26,6 +26,15 @@ which this is built on, is 1.21.7) and players on a 1.21.6+ client.
 `/dialogengine` and `/dialogs` are the same command. Permission:
 `dialogengine.admin`.
 
+## Samples
+
+On the first start the plugin writes ten sample dialogs into
+`plugins/DialogEngine/dialogs/samples/`, one file each: a welcome notice,
+server rules, a shop, kits, warps, a player list, a profile, a report form and
+a settings page, plus a menu of them all. Open the menu with
+`/dialog-samples`. Only ops (`dialogengine.samples`) can open them. Set
+`samples: false` in config.yml and they are never written.
+
 ## Writing a dialog
 
 In the browser: `/de edit <namespace:id>` opens it in Studio's dialog editor
@@ -39,8 +48,8 @@ mistakes.
 
 
 Every folder in `dialogs/` is a namespace, and every key in a `.yml` file in
-it is a dialog: `welcome` in `dialogs/examples/menus.yml` is
-`examples:welcome`. Files sitting directly in `dialogs/` are in the namespace
+it is a dialog: `welcome` in `dialogs/samples/menus.yml` is
+`samples:welcome`. Files sitting directly in `dialogs/` are in the namespace
 `server`. Text is [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
 
 ```yaml

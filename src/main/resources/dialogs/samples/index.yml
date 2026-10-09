@@ -1,0 +1,43 @@
+# samples:index - every sample, a button each. Open it with /dialog-samples.
+#
+# The samples are written into plugins/DialogEngine/dialogs/samples/ the first
+# time the plugin starts. They are yours to copy, change or delete; set
+# "samples: false" in config.yml and they are never written again. Only
+# players with dialogengine.samples (ops) can open them.
+index:
+  command: dialog-samples
+  permission: dialogengine.samples
+  title: "<#3670f8><bold>Dialog Engine</bold></#3670f8> <gray>samples"
+  columns: 2
+  body:
+    - "<gray>Each one is a file in <white>dialogs/samples/</white>. Open it, read it, change it, <white>/de reload</white>."
+  buttons:
+    - label: "Welcome"
+      tooltip: "A notice with the player's head"
+      open: welcome
+    - label: "Server rules"
+      tooltip: "Accept or decline, with a confirmation"
+      open: rules
+    - label: "Shop"
+      tooltip: "Items, a dropdown, a slider and a receipt"
+      open: shop
+    - label: "Kits"
+      tooltip: "Item pictures and buttons only some players see"
+      open: kits
+    - label: "Warps"
+      tooltip: "A list declared in the YAML"
+      open: warps
+    - label: "Players"
+      tooltip: "A paged list of who is online"
+      open: players
+    - label: "Profile"
+      tooltip: "Built-in placeholders and conditions"
+      open: profile
+    - label: "Report a player"
+      tooltip: "Arguments, checks on what is typed, and a confirmation"
+      open: report
+    - label: "Settings"
+      tooltip: "Every kind of input"
+      open: settings
+  exit:
+    label: "Close"
