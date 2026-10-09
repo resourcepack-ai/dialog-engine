@@ -56,7 +56,10 @@ final class Scope implements DialogContext {
     }
 
     boolean isUntrusted(String key) {
-        return untrusted.contains(key);
+        if (untrusted.contains(key)) return true;
+        // A display name is whatever a nickname plugin let the player type, so
+        // it is their words, like an input, unless the dialog set its own.
+        return key.equals("player_display") && !values.containsKey(key);
     }
 
     private String builtIn(String key) {
