@@ -30,6 +30,8 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
     private ai.resourcepack.common.update.UpdateCheck updates;
 
+    private ai.resourcepack.common.telemetry.Heartbeat heartbeat;
+
     @Override
     public void onEnable() {
         try {
@@ -82,11 +84,20 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
                                 + update.running() + "). <#3670f8><u><click:open_url:'" + update.url()
                                 + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>")))
                 .start();
+
+        // Anonymous usage counting, the only telemetry this plugin has: a
+        // random id, the online player count and the names of plugins that
+        // depend on this one. See Heartbeat for exactly what goes.
+        heartbeat = ai.resourcepack.common.telemetry.Heartbeat.of(this, "dialog-engine")
+                .studio(getConfig().getString("edit.url", "https://studio.resourcepack.ai"))
+                .enabledWhen(() -> getConfig().getBoolean("telemetry", true))
+                .start();
     }
 
     @Override
     public void onDisable() {
         if (updates != null) updates.stop();
+        if (heartbeat != null) heartbeat.stop();
         if (engine != null) engine.shutdown();
         DialogEngine.set(null);
     }

@@ -16,6 +16,11 @@ samples: true
 # Nudges you in the console on startup and in chat on join when an update is out.
 update-check: true
 
+# Anonymous usage count, and the only telemetry Dialog Engine has: every 30
+# seconds it sends a random id, how many players are online and the names of
+# plugins that depend on it. Nothing else.
+telemetry: true
+
 # How long a dialog's buttons keep working after it is drawn, in minutes.
 # A player who leaves a dialog open longer than this and then clicks gets
 # nothing; drawing it again (any refresh) starts the clock over.
