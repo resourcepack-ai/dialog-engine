@@ -358,7 +358,9 @@ final class DrawnDialogs {
 
     private void registerCommands() {
         var map = Bukkit.getCommandMap();
-        for (Command c : commands) c.unregister(map);
+        // Out of the known commands too, or the last load's command (and the
+        // permission it was built with) keeps the name until a restart.
+        for (Command c : commands) OpenCommands.unregister(map, c);
         commands.clear();
         for (Drawn d : dialogs.values()) {
             if (d.command == null || !d.command.matches("[a-z0-9_\\-]+")) continue;
@@ -437,7 +439,7 @@ final class DrawnDialogs {
 
     void shutdown() {
         var map = Bukkit.getCommandMap();
-        for (Command c : commands) c.unregister(map);
+        for (Command c : commands) OpenCommands.unregister(map, c);
         commands.clear();
     }
 }

@@ -64,13 +64,19 @@ final class OpenCommands {
     void clear() {
         if (registered.isEmpty()) return;
         CommandMap map = Bukkit.getCommandMap();
-        Map<String, Command> known = map.getKnownCommands();
-        for (DialogCommand cmd : registered.values()) {
-            cmd.unregister(map);
-            known.values().removeIf(c -> c == cmd);
-        }
+        for (DialogCommand cmd : registered.values()) unregister(map, cmd);
         registered.clear();
         refreshClients();
+    }
+
+    /**
+     * Takes {@code cmd} out of the command map for real. {@link Command#unregister}
+     * alone leaves it in the known commands, under its name and its
+     * {@code dialogengine:} one, so it keeps running until a restart.
+     */
+    static void unregister(CommandMap map, Command cmd) {
+        cmd.unregister(map);
+        map.getKnownCommands().values().removeIf(c -> c == cmd);
     }
 
     private void refreshClients() {
