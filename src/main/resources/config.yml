@@ -13,11 +13,7 @@
 # the folder to be rid of them for good.
 samples: true
 
-# While a newer Dialog Engine is out, say so, with a link to its SpigotMC page: on
-# every check, in the console and to anybody online with dialogengine.update (ops),
-# and to each of them every time they join.
-# It asks SpigotMC which version is current, a few seconds after start and
-# every six hours after, and sends nothing about this server in doing so.
+# Nudges you in the console on startup and in chat on join when an update is out.
 update-check: true
 
 # How long a dialog's buttons keep working after it is drawn, in minutes.
