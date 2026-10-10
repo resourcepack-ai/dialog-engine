@@ -7,6 +7,7 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,6 +17,14 @@ import java.util.regex.Pattern;
  * matches. What a player typed is escaped before MiniMessage reads it, so a
  * name or a reason can never become a click event or a colour, and it is kept
  * away from PlaceholderAPI, so it can never name a {@code %placeholder%}.
+ *
+ * <p>In a command that runs ({@link Mode#COMMAND}) a typed value may hold only
+ * {@code A-Z a-z 0-9 _ . -}: a player name, a number or an id, and nothing
+ * that is an argument of its own ({@code @a}, a space) or leaves a string (a
+ * quote). Any other is {@link Unsafe} and the command does not run, unless the
+ * dialog's author filtered it: {@code {key|raw}} as typed, on one line;
+ * {@code {key|json}} and {@code {key|snbt}} escaped for the inside of a quoted
+ * JSON or SNBT string. A filter works on any value, typed or not.
  */
 final class Text {
 
@@ -24,10 +33,28 @@ final class Text {
     enum Mode {
         /** For MiniMessage: player-typed values are escaped. */
         TEXT,
-        /** For commands and action arguments: player-typed values are flattened to one line. */
+        /** For action arguments: player-typed values are flattened to one line. */
         RAW,
+        /** For a command that runs: as RAW, and a player-typed value must be {@link #safe} or filtered. */
+        COMMAND,
         /** For a raw JSON dialog: every value is escaped as a JSON string body. */
         JSON
+    }
+
+    /** What {@code {key|filter}} may say. */
+    private static final Set<String> FILTERS = Set.of("raw", "json", "snbt");
+
+    /**
+     * A {@link Mode#COMMAND} fill met a value a player typed that a command
+     * may not carry as it is. {@code key} is the placeholder that held it.
+     */
+    static final class Unsafe extends RuntimeException {
+        final String key;
+
+        Unsafe(String key) {
+            super("{" + key + "} holds typed text a command may not carry", null, false, false);
+            this.key = key;
+        }
     }
 
     private Text() {}
@@ -103,11 +130,20 @@ final class Text {
     private static String placeholder(String inner, Scope scope, Mode mode, List<String> held) {
         int q = inner.indexOf('?');
         String key = q < 0 ? inner : inner.substring(0, q);
+        // {key|filter}: on a plain value only, since a choice's words are split on |.
+        String filter = null;
+        int bar = q < 0 ? key.indexOf('|') : -1;
+        if (bar >= 0) {
+            filter = key.substring(bar + 1);
+            key = key.substring(0, bar);
+            if (!FILTERS.contains(filter)) return null;
+        }
         if (!isKey(key)) return null;
         String value = scope.lookup(key);
+        boolean untrusted = scope.isUntrusted(key);
         if (q < 0) {
             if (value == null) return null;
-            return hold(encode(value, scope.isUntrusted(key), mode), scope.isUntrusted(key), held);
+            return hold(encode(key, value, untrusted, mode, filter), untrusted, held);
         }
         // A choice: the words are the dialog's own, so they are not escaped.
         String[] entries = inner.substring(q + 1).split("\\|", -1);
@@ -131,7 +167,7 @@ final class Text {
         // The chosen words may themselves name placeholders: "{x?a:{y}|b}" is not
         // supported (a brace ends the choice), but "$value" prints the value.
         if (chosen.contains("$value")) {
-            chosen = chosen.replace("$value", value == null ? "" : hold(encode(value, scope.isUntrusted(key), mode), scope.isUntrusted(key), held));
+            chosen = chosen.replace("$value", value == null ? "" : hold(encode(key, value, untrusted, mode, null), untrusted, held));
         }
         return mode == Mode.JSON ? jsonEscape(chosen) : chosen;
     }
@@ -153,12 +189,39 @@ final class Text {
         return true;
     }
 
-    private static String encode(String value, boolean untrusted, Mode mode) {
-        return switch (mode) {
-            case TEXT -> untrusted ? MM.escapeTags(value) : value;
-            case RAW -> untrusted ? value.replace('\n', ' ').replace('\r', ' ') : value;
-            case JSON -> jsonEscape(value);
+    /**
+     * One value, as it goes where {@code mode} puts it. A filter escapes for
+     * the string the author put the value in, and the mode then escapes for
+     * what is around that: {@code {x|json}} in a raw JSON dialog is escaped
+     * twice, as a JSON string inside a JSON string has to be.
+     */
+    private static String encode(String key, String value, boolean untrusted, Mode mode, String filter) {
+        if (mode == Mode.COMMAND && untrusted && filter == null && !safe(value)) throw new Unsafe(key);
+        String v = filter == null ? value : switch (filter) {
+            case "json" -> jsonEscape(value);
+            case "snbt" -> snbtEscape(value);
+            default -> value;
         };
+        return switch (mode) {
+            case TEXT -> untrusted ? MM.escapeTags(v) : v;
+            case RAW, COMMAND -> untrusted ? v.replace('\n', ' ').replace('\r', ' ') : v;
+            case JSON -> jsonEscape(v);
+        };
+    }
+
+    /**
+     * Whether a typed value can go into a command as it is: a player name, a
+     * number, an id. Not a space (a second argument), not {@code @} (a
+     * selector), not a quote, brace or bracket (out of a JSON or SNBT string).
+     */
+    static boolean safe(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-')) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static String jsonEscape(String s) {
@@ -167,6 +230,31 @@ final class Text {
             char c = s.charAt(i);
             switch (c) {
                 case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> {
+                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
+                    else out.append(c);
+                }
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * The inside of a quoted SNBT string, in either quote: the game's SNBT
+     * (1.21.5 and newer, so every server this runs on) reads {@code \'} and
+     * {@code \"} in both.
+     */
+    static String snbtEscape(String s) {
+        StringBuilder out = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> out.append("\\\"");
+                case '\'' -> out.append("\\'");
                 case '\\' -> out.append("\\\\");
                 case '\n' -> out.append("\\n");
                 case '\r' -> out.append("\\r");

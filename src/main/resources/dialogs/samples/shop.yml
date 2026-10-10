@@ -1,9 +1,15 @@
 # samples:shop - pick an item and how many, then confirm. Open it with
 # /de open samples:shop
 #
-# Nothing is bought here. With an economy plugin, Buy would run something like
-#   "[console] eco take {player} {total}"
-#   "[console] give {player} {item} {amount}"
+# Nothing is bought here. With an economy plugin, Buy on shop_confirm would
+# check the player can pay BEFORE taking anything, then take and give. For one
+# diamond at 100 coins, with PlaceholderAPI's Vault expansion:
+#   "[if] %vault_eco_balance% >= 100"
+#   "[console] eco take {player} 100"
+#   "[console] give {player} diamond 1"
+# A command that does not exist or throws stops the actions after it, but an
+# "eco take" that ran and refused counts as done, so without the [if] a player
+# with no money would still get the diamond.
 shop:
   permission: dialogengine.samples
   title: "<gold><bold>Shop"

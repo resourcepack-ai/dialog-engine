@@ -4,7 +4,9 @@
 #
 # The command is /sample-report so it stays out of the way of a real /report.
 # With a staff plugin, Send might run "[console] staffchat {player} reported
-# {target} for {reason.label}: {details}".
+# {target} for {reason.label}: {details|raw}". {target} goes in as typed only
+# when it is a name; |raw lets the details through as typed, which is safe as
+# the last words of a plugin's command (not vanilla's say or msg, which read @a).
 report:
   command: sample-report
   permission: dialogengine.samples

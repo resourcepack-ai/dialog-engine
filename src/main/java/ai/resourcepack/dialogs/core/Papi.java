@@ -37,7 +37,8 @@ final class Papi {
     private static Method method() {
         if (probed) return set;
         probed = true;
-        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) return null;
+        // No server: a unit test, filling text with nothing installed.
+        if (Bukkit.getServer() == null || Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) return null;
         try {
             set = Class.forName("me.clip.placeholderapi.PlaceholderAPI").getMethod("setPlaceholders", OfflinePlayer.class, String.class);
         } catch (ReflectiveOperationException | LinkageError e) {

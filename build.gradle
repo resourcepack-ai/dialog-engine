@@ -63,6 +63,14 @@ dependencies {
     // The small library every ResourcePack AI plugin shades in (the update
     // check, for one), relocated below so it never meets another plugin's copy.
     implementation 'ai.resourcepack:common:0.2.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.spigotmc:spigot-api:1.21.8-R0.1-SNAPSHOT'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 shadowJar {

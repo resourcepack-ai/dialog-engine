@@ -20,7 +20,11 @@ public interface ClickContext extends DialogContext {
     /** Sets a value for the rest of this click (and any dialog it opens). Null removes it. */
     void set(String key, String value);
 
-    /** Fills placeholders in a string the way an action's argument is filled. */
+    /**
+     * Fills placeholders in a string the way an action's argument is filled:
+     * what a player typed goes in as typed, on one line, so check it before
+     * the result becomes a command.
+     */
     String resolve(String text);
 
     /** Opens another dialog, carrying this one's values over plus {@code extra}. {@code [back]} returns here. */

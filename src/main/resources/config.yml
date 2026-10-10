@@ -56,6 +56,12 @@ messages:
   required: "{label} can't be empty."
   too-short: "{label} needs at least {min} characters."
   invalid: "{label} isn't valid."
+  # What a player typed was going into a command, and it had more than a name's
+  # characters in it (letters, numbers, _ . -). Shown like a failed check.
+  unsafe-value: "{label} can only have letters, numbers, _ . and - in it."
+  # A [console] command failed (it does not exist, or threw an error), so the
+  # actions after it did not run.
+  command-failed: "<red>That didn't work, so nothing more was done."
   link: "<gray>Open: <aqua><u>{url}</u></aqua>"
   # A drawn dialog opened before the player has its pack (the samples' pack is
   # only sent then), and what happens if they decline it or it fails.

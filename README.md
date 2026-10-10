@@ -73,7 +73,7 @@ shop:
     - "<gray>You have <white>%vault_eco_balance%</white> coins."   # text
     - item: diamond             # an item, with words beside it
       name: "<aqua>Diamond"
-      description: "<gray>64 for 100 coins"
+      description: "<gray>A coin each"
   inputs:
     - key: amount
       type: slider
@@ -86,6 +86,7 @@ shop:
     - label: "<green>Buy"
       tooltip: "Buy {amount} diamonds"
       actions:
+        - "[if] %vault_eco_balance% >= {amount}"    # stop unless they can pay (see Actions)
         - "[console] eco take {player} {amount}"
         - "[console] give {player} diamond {amount}"
         - "[message] <green>Bought {amount} diamonds."
@@ -125,7 +126,8 @@ also print where it likes). A button with `validate: false` skips the checks.
 The exit button never checks.
 
 What a player typed is escaped wherever it is printed, so nobody can put a
-colour or a click into somebody else's screen.
+colour or a click into somebody else's screen, and a command takes it only as
+a name, a number or an id unless the dialog says otherwise (see Actions).
 
 ### Buttons
 
@@ -162,6 +164,35 @@ Run in order. A line without a `[tag]` is a command the player runs.
 | `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box) |
 | `[myplugin:tag] ...` | Whatever another plugin registered |
 
+**What a player typed, in a command.** A `[console]` or `[player]` command
+takes a typed value (a text input, a command's `args:`, values from
+`/de open`, `{player_display}`) only when it is letters, digits, `_`, `.` and
+`-`: a name, a number, an id. Anything else (`@a`, a space, a quote) and the
+button runs nothing (or nothing more, for a value an earlier `[set]` made): a
+text input is drawn again with the message `unsafe-value` on it, anything else
+gets it in chat, and the console says which placeholder it was. Where more is
+safe, say how the value is used:
+
+| | |
+|---|---|
+| `{key\|raw}` | As typed, on one line. For the last, free-text argument of a plugin's command: `staffchat {player}: {details\|raw}`. Not for vanilla's `say`, `msg` or `tell`, which read `@a` in it. In a `[player]` command it is usually fine: the player could type that command themselves |
+| `{key\|json}` | Escaped for the inside of a quoted JSON string: `tellraw @a {"text":"{msg\|json}"}` |
+| `{key\|snbt}` | Escaped for the inside of a quoted SNBT string: `give {player} paper[custom_name='{name\|snbt}']` |
+
+Values from the dialog itself, from plugins and PlaceholderAPI, and from
+sliders, toggles and dropdowns (only options the dialog drew count) are not
+checked. A filter works on them too.
+
+**A command that fails stops the rest.** When a `[console]` or `[player]`
+command fails as far as the server can tell, the actions after it do not run,
+and for `[console]` the player is told (`command-failed`) and the console
+logs it. The server can only tell when the command does not exist (the plugin
+behind it is missing, say) or throws an error. A command that ran and refused,
+like an `eco take` without the money in the account, has succeeded as far as
+the server knows, whatever it printed. So check before taking anything, as the
+shop above does with `[if] %vault_eco_balance% >= {amount}` (PlaceholderAPI's
+Vault expansion).
+
 ### Placeholders
 
 `{name}` anywhere: titles, text, labels, tooltips, actions, conditions.
@@ -176,6 +207,8 @@ Run in order. A line without a `[tag]` is a command the player runs.
 - **A choice**: `{mode?on:Enabled|off:Disabled|Unknown}` prints the words for
   the value `mode` has, and the last entry when none matches. `$value` in the
   words prints the value itself.
+- **A filter**: `{name|raw}`, `{name|json}`, `{name|snbt}`, for putting what a
+  player typed into a command (see Actions).
 
 A name nothing knows is left as written.
 
