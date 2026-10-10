@@ -26,7 +26,7 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
     private Engine engine;
 
     /** This plugin's SpigotMC resource id: the number in its page's URL. */
-    private static final int SPIGOT_RESOURCE = 139452;
+    private static final int SPIGOT_RESOURCE = 139513;
 
     private ai.resourcepack.common.update.UpdateCheck updates;
 
