@@ -2,6 +2,7 @@ package ai.resourcepack.dialogs.core;
 
 import ai.resourcepack.dialogs.core.Defs.DialogDef;
 import ai.resourcepack.dialogs.drawn.DialogBars;
+import ai.resourcepack.dialogs.drawn.DialogConditions;
 import ai.resourcepack.dialogs.drawn.DialogPlaceholders;
 import ai.resourcepack.dialogs.drawn.DialogRows;
 import ai.resourcepack.dialogs.drawn.DialogVariables;
@@ -305,11 +306,34 @@ final class DrawnDialogs {
         return false;
     }
 
-    /** The placeholder pass: what it was opened with, the player's settings, the engine's own values. */
+    /**
+     * The placeholder pass, after the pieces this player is not to see
+     * ("show when") are emptied, so nothing in one is looked up and no marker
+     * in one is left for the passes after this.
+     */
     private String filled(Player player, Drawn d, String json, Map<String, String> values) {
-        boolean placeholders = DialogPlaceholders.any(json);
+        boolean conditions = DialogConditions.any(json);
         boolean rows = DialogRows.any(json);
-        if (!placeholders && !rows) return json;
+        if (!conditions && !rows && !DialogPlaceholders.any(json)) return json;
+        Function<String, Optional<String>> lookup = lookup(player, d, values);
+        String out = conditions ? DialogConditions.strip(json, lookup, player::hasPermission) : json;
+        out = DialogPlaceholders.any(out) ? DialogPlaceholders.fill(out, lookup) : out;
+        return rows ? DialogRows.strip(out, lookup) : out;
+    }
+
+    /**
+     * A stored page with only the pieces this player may see in it, for checking
+     * a click against: a button hidden from them was never theirs to press, and
+     * typing its command by hand must not press it. Written back the way the page
+     * was stored, so {@link #holds} matches it as it matches the page.
+     */
+    private String visible(Player player, Drawn d, String json, Map<String, String> values) {
+        if (!DialogConditions.any(json)) return json;
+        return GSON.toJson(JsonParser.parseString(DialogConditions.strip(json, lookup(player, d, values), player::hasPermission)));
+    }
+
+    /** What a placeholder or a condition is answered from: what it was opened with, the player's settings, the engine's own values. */
+    private Function<String, Optional<String>> lookup(Player player, Drawn d, Map<String, String> values) {
         Map<String, String> given = new HashMap<>();
         values.forEach((k, v) -> given.put(k.toLowerCase(Locale.ROOT), v));
         Scope scope = new Scope(engine, player, d.id, given, Set.of(), null, null);
@@ -320,12 +344,10 @@ final class DrawnDialogs {
             if (stored.isPresent()) return stored;
             return Optional.ofNullable(scope.lookup(name));
         };
-        Function<String, Optional<String>> lookup = name -> {
+        return name -> {
             Optional<String> found = direct.apply(name);
             return found.isPresent() ? found : DialogRows.item(name, given, direct);
         };
-        String out = placeholders ? DialogPlaceholders.fill(json, lookup) : json;
-        return rows ? DialogRows.strip(out, lookup) : out;
     }
 
     // ------------------------------------------------------------------ clicks
@@ -348,8 +370,9 @@ final class DrawnDialogs {
         String command = CLICK + " " + String.join(" ", act && args.length == 3 ? Arrays.copyOf(args, 2) : args);
         // A click is checked against the page as stored and as the player saw it:
         // a switch, slider or dropdown's command names its next value through a
-        // placeholder, so only the filled drawing holds it.
-        String json = d == null ? null : d.pages.get(shown.page);
+        // placeholder, so only the filled drawing holds it. Both without what was
+        // hidden from this player.
+        String json = d == null ? null : visible(player, d, d.pages.get(shown.page), shown.session.values);
         String seen = d == null ? null : shown.json;
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
             if (picture(json, command) || picture(seen, command)) clickSound(player);
