@@ -95,7 +95,29 @@ final class ClickCtx implements ClickContext {
 
     @Override
     public void set(String key, String value) {
-        set(key, value, false);
+        set(key, value, value != null && carriesUntrusted(value));
+    }
+
+    /**
+     * Whether a value a plugin hands back carries words a player typed, so it
+     * stays untrusted rather than being laundered into MiniMessage by
+     * {@code ctx.set("target", ctx.get("typed"))}. A value is plain strings, so
+     * this goes by what it holds: one that IS a typed value, or holds a typed
+     * value that could do something (a tag, a line break) not as
+     * {@link Engine#escape} left it. Holding a harmless one changes nothing
+     * either way, and an escaped one is the plugin doing it right.
+     */
+    boolean carriesUntrusted(String value) {
+        for (String key : session.untrusted) {
+            String typed = session.values.get(key);
+            if (typed == null || typed.isEmpty()) continue;
+            if (value.equals(typed)) return true;
+            if (!value.contains(typed)) continue;
+            if (typed.indexOf('\n') >= 0 || typed.indexOf('\r') >= 0) return true;
+            String escaped = Text.MM.escapeTags(typed);
+            if (!escaped.equals(typed) && !value.contains(escaped)) return true;
+        }
+        return false;
     }
 
     void set(String key, String value, boolean untrusted) {
@@ -121,7 +143,8 @@ final class ClickCtx implements ClickContext {
         if (extra != null) {
             extra.forEach((k, v) -> {
                 values.put(k, v);
-                untrusted.remove(k);
+                if (v != null && carriesUntrusted(v)) untrusted.add(k);
+                else untrusted.remove(k);
             });
         }
         if (engine.openAsPlayer(player, id, values, untrusted, session)) responded = true;
@@ -159,7 +182,7 @@ final class ClickCtx implements ClickContext {
 
     @Override
     public void close() {
-        Platform.closeDialog(player);
+        engine.closeDialog(player);
         responded = true;
     }
 

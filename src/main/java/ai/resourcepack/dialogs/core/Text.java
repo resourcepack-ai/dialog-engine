@@ -5,11 +5,17 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Placeholder filling. {@code {key}} is a value; {@code {key?a:Words|b:Other|Default}}
  * picks the words for the value {@code key} has, the last entry when none
  * matches. What a player typed is escaped before MiniMessage reads it, so a
- * name or a reason can never become a click event or a colour.
+ * name or a reason can never become a click event or a colour, and it is kept
+ * away from PlaceholderAPI, so it can never name a {@code %placeholder%}.
  */
 final class Text {
 
@@ -42,13 +48,34 @@ final class Text {
 
     static String fill(String raw, Scope scope, Mode mode) {
         if (raw == null) return "";
-        String out = fillBraces(raw, scope, mode);
         // Not in a raw JSON dialog: a PlaceholderAPI value there could break the JSON it lands in.
-        if (mode != Mode.JSON && out.indexOf('%') >= 0) out = Papi.apply(scope.viewer, out, mode);
-        return out;
+        if (mode == Mode.JSON || !Papi.available()) return fillBraces(raw, scope, mode, null);
+        // What a player typed never reaches PlaceholderAPI: "%parseother_{Admin}_{player_ip}%"
+        // in a text box would otherwise print somebody else's address. Each typed value
+        // is held out as a marker while PlaceholderAPI runs, and put back after.
+        List<String> held = new ArrayList<>();
+        String out = fillBraces(raw, scope, mode, held);
+        if (out.indexOf('%') >= 0) out = Papi.apply(scope.viewer, out, mode);
+        return held.isEmpty() ? out : restore(out, held);
     }
 
-    private static String fillBraces(String raw, Scope scope, Mode mode) {
+    private static final char HELD_OPEN = '\uE000';
+    private static final char HELD_CLOSE = '\uE001';
+    private static final Pattern HELD = Pattern.compile(HELD_OPEN + "(\\d{1,6})" + HELD_CLOSE);
+
+    /** Puts the held values back, in one pass: a value is never searched again for markers. */
+    static String restore(String out, List<String> held) {
+        Matcher m = HELD.matcher(out);
+        StringBuilder sb = new StringBuilder(out.length() + 16);
+        while (m.find()) {
+            int i = Integer.parseInt(m.group(1));
+            m.appendReplacement(sb, Matcher.quoteReplacement(i < held.size() ? held.get(i) : m.group()));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static String fillBraces(String raw, Scope scope, Mode mode, List<String> held) {
         if (raw.indexOf('{') < 0) return raw;
         StringBuilder out = new StringBuilder(raw.length() + 16);
         int i = 0;
@@ -58,7 +85,7 @@ final class Text {
                 int end = raw.indexOf('}', i + 1);
                 if (end > i) {
                     String inner = raw.substring(i + 1, end);
-                    String replaced = placeholder(inner, scope, mode);
+                    String replaced = placeholder(inner, scope, mode, held);
                     if (replaced != null) {
                         out.append(replaced);
                         i = end + 1;
@@ -73,14 +100,14 @@ final class Text {
     }
 
     /** The replacement for one {@code {...}}, or null to leave it as written. */
-    private static String placeholder(String inner, Scope scope, Mode mode) {
+    private static String placeholder(String inner, Scope scope, Mode mode, List<String> held) {
         int q = inner.indexOf('?');
         String key = q < 0 ? inner : inner.substring(0, q);
         if (!isKey(key)) return null;
         String value = scope.lookup(key);
         if (q < 0) {
             if (value == null) return null;
-            return encode(value, scope.isUntrusted(key), mode);
+            return hold(encode(value, scope.isUntrusted(key), mode), scope.isUntrusted(key), held);
         }
         // A choice: the words are the dialog's own, so they are not escaped.
         String[] entries = inner.substring(q + 1).split("\\|", -1);
@@ -104,9 +131,17 @@ final class Text {
         // The chosen words may themselves name placeholders: "{x?a:{y}|b}" is not
         // supported (a brace ends the choice), but "$value" prints the value.
         if (chosen.contains("$value")) {
-            chosen = chosen.replace("$value", value == null ? "" : encode(value, scope.isUntrusted(key), mode));
+            chosen = chosen.replace("$value", value == null ? "" : hold(encode(value, scope.isUntrusted(key), mode), scope.isUntrusted(key), held));
         }
         return mode == Mode.JSON ? jsonEscape(chosen) : chosen;
+    }
+
+    /** An untrusted value as a marker {@link #restore} swaps back, when PlaceholderAPI is about to run. */
+    private static String hold(String encoded, boolean untrusted, List<String> held) {
+        // Every typed value, not just one with a % in it: "%{x}%" would let the typed half name the placeholder.
+        if (!untrusted || held == null) return encoded;
+        held.add(encoded);
+        return HELD_OPEN + String.valueOf(held.size() - 1) + HELD_CLOSE;
     }
 
     static boolean isKey(String key) {

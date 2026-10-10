@@ -165,6 +165,7 @@ Run in order. A line without a `[tag]` is a command the player runs.
   `{player_y}` `{player_z}` `{player_health}` `{player_level}`
   `{player_gamemode}` `{online}` `{max_players}` `{dialog}`.
 - Whatever a plugin registered, and every PlaceholderAPI `%placeholder%`.
+  One in what a player typed is printed as typed, never filled.
 - **A choice**: `{mode?on:Enabled|off:Disabled|Unknown}` prints the words for
   the value `mode` has, and the last entry when none matches. `$value` in the
   words prints the value itself.

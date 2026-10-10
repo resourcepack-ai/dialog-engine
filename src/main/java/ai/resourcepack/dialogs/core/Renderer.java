@@ -34,7 +34,8 @@ import java.util.UUID;
  * Turns a definition and a session into the game's dialog, for one player.
  * A dialog is drawn fresh every time it is shown: placeholders, conditions and
  * lists are all evaluated here, and every button gets a callback bound to the
- * session it was drawn from.
+ * session it was drawn from and to this drawing, so it dies when the next one
+ * replaces it.
  *
  * <p>What comes out is the game's own dialog JSON, the same on every server;
  * {@link Platform} decides how it reaches the screen.
@@ -50,7 +51,8 @@ final class Renderer {
     /** What one drawing produced: the dialog, and the inputs on it (so a click knows what to read). */
     record Drawn(JsonObject dialog, List<InputDef> inputs, Map<String, Map<String, String>> optionLabels) {}
 
-    Drawn draw(DialogDef def, Session session, Player viewer) {
+    /** Draws it as drawing number {@code drawing} of the viewer's (see {@link Engine#onClick}). */
+    Drawn draw(DialogDef def, Session session, Player viewer, long drawing) {
         Scope scope = new Scope(engine, viewer, def.id(), session.values, session.untrusted, null, null);
         Map<String, List<Map<String, String>>> lists = new HashMap<>();
         paging(def, scope, session, lists);
@@ -84,13 +86,13 @@ final class Renderer {
             for (Scope s : expand(b.forEach(), scope, lists)) {
                 if (b.permission() != null && !viewer.hasPermission(b.permission())) continue;
                 if (!Conditions.test(b.condition(), s)) continue;
-                buttons.add(button(def, b, s, session, drawnInputs, optionLabels, viewer));
+                buttons.add(button(def, b, s, session, drawnInputs, optionLabels, viewer, drawing));
             }
         }
         JsonObject exit = null;
         if (def.exit() != null && Conditions.test(def.exit().condition(), scope)
                 && (def.exit().permission() == null || viewer.hasPermission(def.exit().permission()))) {
-            exit = button(def, def.exit(), scope, session, drawnInputs, optionLabels, viewer);
+            exit = button(def, def.exit(), scope, session, drawnInputs, optionLabels, viewer, drawing);
         }
 
         JsonObject dialog = new JsonObject();
@@ -407,7 +409,7 @@ final class Renderer {
     }
 
     private JsonObject button(DialogDef def, ButtonDef b, Scope s, Session session, List<InputDef> inputs,
-                              Map<String, Map<String, String>> optionLabels, Player viewer) {
+                              Map<String, Map<String, String>> optionLabels, Player viewer, long drawing) {
         JsonObject button = new JsonObject();
         button.add("label", Text.json(b.label(), s));
         if (b.tooltip() != null) button.add("tooltip", Text.json(b.tooltip(), s));
@@ -418,8 +420,10 @@ final class Renderer {
             // may own it through DialogClickEvent.
             Map<String, String> row = s.row == null ? Map.of() : Map.copyOf(s.row);
             String alias = s.alias;
-            String token = engine.clicks().bind(viewer, engine.clickLifetime(),
-                    payload -> engine.onClick(viewer, def, b, session, alias, row, inputs, optionLabels, payload));
+            // The player who clicked, not the one drawn for: Clicks has checked they are
+            // the same, and onClick checks again against the session.
+            String token = engine.clicks().bind(viewer, engine.clickLifetime(), drawing,
+                    (clicker, payload) -> engine.onClick(clicker, drawing, def, b, session, alias, row, inputs, optionLabels, payload));
             action = Clicks.action(token);
         }
         button.add("action", action);

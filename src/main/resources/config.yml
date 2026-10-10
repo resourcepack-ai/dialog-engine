@@ -61,6 +61,7 @@ messages:
 # /de edit <id> opens a dialog in the dialog editor at resourcepack.ai, in the
 # browser, with no account. Pressing "Send to server" there writes it back into
 # its file here and reloads. Only what you edit is sent: that one dialog.
+# It must be https:// (plain http:// only for a Studio on this machine).
 edit:
   url: "https://studio.resourcepack.ai"
 
@@ -73,6 +74,8 @@ pack:
   required: false
   # Served from this server on this port...
   port: 8165
+  # ...listening on this address only (blank: every address the machine has).
+  bind: ""
   # ...at this address. Set it to the server's public address or domain.
   public-host: ""
   # Or host the pack yourself and put its URL here (/de pack writes it out).

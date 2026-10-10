@@ -2,6 +2,10 @@ package ai.resourcepack.dialogs.core;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import com.google.gson.reflect.TypeToken;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.LoaderOptions;
@@ -18,10 +22,13 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A drawn dialog's folder, {@code drawn/<namespace>/<name>/}:
@@ -105,6 +112,13 @@ final class DrawnFiles {
      * nothing is.
      */
     static void writeDrawing(Path dir, EditWire.Pull pull, boolean writeSource) throws IOException {
+        // The drawing may only run commands its document has: the document that
+        // came with it, or (a redraw) the one here, which Studio cannot change.
+        Map<String, Object> source = writeSource ? pull.dialog.spec : read(dir);
+        List<String> invented = invented(GSON.toJsonTree(pull.dialog.built), commands(source));
+        if (!invented.isEmpty()) {
+            throw new IOException("the drawing runs a command " + SOURCE + " does not have: " + invented.get(0));
+        }
         Path pack = dir.resolve("pack");
         Map<Path, byte[]> files = new LinkedHashMap<>();
         for (EditWire.File f : pull.files == null ? List.<EditWire.File>of() : pull.files) {
@@ -133,6 +147,64 @@ final class DrawnFiles {
         } else {
             // Drawn from the file as it stands: record that, and leave the file (comments and all) alone.
             Files.writeString(dir.resolve(BUILT), hash(Files.readString(dir.resolve(SOURCE), StandardCharsets.UTF_8)));
+        }
+    }
+
+    // ------------------------------------------------------------------ commands
+
+    private static final Pattern CHAT_ILLEGAL = Pattern.compile("[\\x00-\\x1f\\x7f\u00a7]");
+
+    /**
+     * A command as Studio writes it into a drawing: no leading space or slash,
+     * nothing the game refuses in chat, no trailing space (Studio's
+     * {@code dialogCommandText}). Both sides of {@link #commands} go through it.
+     */
+    static String commandText(String value) {
+        String s = value.stripLeading();
+        if (s.startsWith("/")) s = s.substring(1);
+        return CHAT_ILLEGAL.matcher(s).replaceAll("").stripTrailing();
+    }
+
+    /** Every string in the document, as a command: what a drawing of it may run. */
+    static Set<String> commands(Map<String, Object> spec) {
+        Set<String> out = new HashSet<>();
+        if (spec != null) collect(spec, out);
+        return out;
+    }
+
+    private static void collect(Object value, Set<String> out) {
+        if (value instanceof String s) {
+            String c = commandText(s);
+            if (!c.isEmpty()) out.add(c);
+        } else if (value instanceof Map<?, ?> map) {
+            for (Object v : map.values()) collect(v, out);
+        } else if (value instanceof List<?> list) {
+            for (Object v : list) collect(v, out);
+        }
+    }
+
+    /**
+     * Every click in a drawing that runs a command {@code allowed} lacks. RP
+     * Engine's page, var and slot clicks are left out: Studio writes those
+     * itself, and they only ever turn a page or set a declared setting.
+     */
+    static List<String> invented(JsonElement built, Set<String> allowed) {
+        List<String> out = new ArrayList<>();
+        scan(built, allowed, out);
+        return out;
+    }
+
+    private static void scan(JsonElement e, Set<String> allowed, List<String> out) {
+        if (e instanceof JsonArray a) {
+            for (JsonElement x : a) scan(x, allowed, out);
+        } else if (e instanceof JsonObject o) {
+            boolean runs = (o.get("action") instanceof JsonPrimitive p && p.isString() && "run_command".equals(p.getAsString()))
+                    || (o.get("type") instanceof JsonPrimitive p2 && p2.isString() && "minecraft:run_command".equals(p2.getAsString()));
+            if (runs && o.get("command") instanceof JsonPrimitive c && c.isString()) {
+                String command = c.getAsString();
+                if (!DrawnDialogs.ENGINE_CLICK.matcher(command).matches() && !allowed.contains(commandText(command))) out.add(command);
+            }
+            for (Map.Entry<String, JsonElement> x : o.entrySet()) scan(x.getValue(), allowed, out);
         }
     }
 

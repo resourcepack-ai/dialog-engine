@@ -4,15 +4,25 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.sun.net.httpserver.HttpServer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,8 +51,9 @@ final class DrawnPack {
     private final Engine engine;
     private byte[] zip;
     private String sha1;
-    private HttpServer server;
+    private Served server;
     private int servedPort = -1;
+    private String servedBind;
 
     DrawnPack(Engine engine) {
         this.engine = engine;
@@ -164,33 +175,138 @@ final class DrawnPack {
         return cfg().getBoolean("send", true) && cfg().getString("url", "").isBlank();
     }
 
+    /** Downloads served at once; more wait in a short queue, and past that are turned away. */
+    private static final int THREADS = 4;
+    private static final int QUEUE = 32;
+    /** How long a client gets to send its request, and to take the whole pack. */
+    private static final int REQUEST_TIMEOUT_MS = 10_000;
+    private static final long DOWNLOAD_TIMEOUT_MS = 120_000;
+
+    /**
+     * Serves the zip over plain HTTP: one GET (or HEAD) per connection, then
+     * closed. Small and strict on purpose, because anybody on the internet can
+     * reach it: a fixed number of downloads at once, a queue that turns the
+     * rest away, ten seconds to send a request and two minutes to take the
+     * pack, so a slow or idle connection holds one worker for a bounded time
+     * and never the server.
+     */
     private synchronized void serve() {
         if (zip == null || !hosting()) return;
         int port = cfg().getInt("port", 8165);
-        if (server != null && servedPort == port) return;
+        String bind = cfg().getString("bind", "").trim();
+        if (server != null && servedPort == port && bind.equals(servedBind)) return;
         stop();
         try {
-            server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/", exchange -> {
-                byte[] body = zip;
-                if (body == null) {
-                    exchange.sendResponseHeaders(404, -1);
-                    exchange.close();
-                    return;
-                }
-                exchange.getResponseHeaders().add("Content-Type", "application/zip");
-                exchange.sendResponseHeaders(200, body.length);
-                try (OutputStream out = exchange.getResponseBody()) {
-                    out.write(body);
-                }
-            });
-            server.start();
+            ServerSocket socket = new ServerSocket();
+            socket.setReuseAddress(true);
+            socket.bind(bind.isEmpty() ? new InetSocketAddress(port) : new InetSocketAddress(bind, port), 50);
+            ThreadPoolExecutor workers = new ThreadPoolExecutor(THREADS, THREADS, 30, TimeUnit.SECONDS,
+                    new ArrayBlockingQueue<>(QUEUE), daemon("DialogEngine pack"), new ThreadPoolExecutor.AbortPolicy());
+            ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(daemon("DialogEngine pack watchdog"));
+            Served served = new Served(socket, workers, watchdog);
+            server = served;
+            Thread acceptor = daemon("DialogEngine pack server").newThread(() -> accept(served));
+            acceptor.start();
             servedPort = port;
+            servedBind = bind;
             engine.plugin().getLogger().info("Serving the drawn dialog pack on port " + port + " as " + url());
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             server = null;
             engine.plugin().getLogger().warning("Could not serve the drawn dialog pack on port " + port + ": " + e.getMessage()
                     + ". Set pack.port, or pack.url to a pack you host yourself.");
+        }
+    }
+
+    private record Served(ServerSocket socket, ThreadPoolExecutor workers, ScheduledExecutorService watchdog) {
+        void close() {
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+                // closing anyway
+            }
+            workers.shutdownNow();
+            watchdog.shutdownNow();
+        }
+    }
+
+    private static ThreadFactory daemon(String name) {
+        return r -> {
+            Thread t = new Thread(r, name);
+            t.setDaemon(true);
+            return t;
+        };
+    }
+
+    private void accept(Served s) {
+        while (!s.socket().isClosed()) {
+            Socket client;
+            try {
+                client = s.socket().accept();
+            } catch (IOException e) {
+                if (s.socket().isClosed()) return;
+                continue;
+            }
+            try {
+                s.workers().execute(() -> answer(s, client));
+            } catch (RejectedExecutionException full) {
+                closeQuietly(client);
+            }
+        }
+    }
+
+    private void answer(Served s, Socket client) {
+        // Whatever happens, the connection is closed when its time is up: a
+        // write blocked on a client that stopped reading ends with it.
+        ScheduledFuture<?> deadline = s.watchdog().schedule(() -> closeQuietly(client), DOWNLOAD_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        try (client) {
+            client.setSoTimeout(REQUEST_TIMEOUT_MS);
+            String request = readHead(new java.io.BufferedInputStream(client.getInputStream()));
+            OutputStream out = client.getOutputStream();
+            String[] line = request == null ? new String[0] : request.split(" ");
+            boolean head = line.length >= 2 && line[0].equals("HEAD");
+            byte[] body = zip;
+            if (line.length < 2 || !(head || line[0].equals("GET"))) {
+                out.write("HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            } else if (body == null) {
+                out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            } else {
+                out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/zip\r\nContent-Length: " + body.length
+                        + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+                if (!head) out.write(body);
+            }
+            out.flush();
+        } catch (IOException ignored) {
+            // A client that went away, or ran out of time.
+        } finally {
+            deadline.cancel(false);
+        }
+    }
+
+    /** The request line, after reading the headers up to the blank line; null when there is none. At most 8 KB. */
+    private static String readHead(InputStream in) throws IOException {
+        StringBuilder line = new StringBuilder();
+        String first = null;
+        int total = 0;
+        int c;
+        while ((c = in.read()) >= 0) {
+            if (++total > 8192) return null;
+            if (c == '\n') {
+                String l = line.toString().strip();
+                if (l.isEmpty()) return first;
+                if (first == null) first = l;
+                line.setLength(0);
+            } else {
+                line.append((char) c);
+            }
+        }
+        return first;
+    }
+
+    private static void closeQuietly(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // already closed
         }
     }
 
@@ -220,8 +336,9 @@ final class DrawnPack {
     }
 
     synchronized void stop() {
-        if (server != null) server.stop(0);
+        if (server != null) server.close();
         server = null;
         servedPort = -1;
+        servedBind = null;
     }
 }

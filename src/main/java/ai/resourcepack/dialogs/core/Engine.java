@@ -65,8 +65,21 @@ public final class Engine implements DialogEngineAPI {
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
     private final Set<String> warned = ConcurrentHashMap.newKeySet();
     private final Map<String, String> jsonCache = new ConcurrentHashMap<>();
-    /** Counts every dialog shown to a player, so a delayed close can tell whether one came since. */
+    /**
+     * Counts every dialog shown to a player, so a delayed close can tell whether
+     * one came since. It is also the number of the drawing on their screen: a
+     * button only works while the drawing it was bound to is the latest.
+     */
     private final Map<UUID, Long> shown = new ConcurrentHashMap<>();
+    /** Each player's clicks this second: {second, count}. */
+    private final Map<UUID, long[]> clickRate = new ConcurrentHashMap<>();
+    /**
+     * How many clicks (button presses and drawn-dialog clicks) a player gets a
+     * second. Each one can redraw a dialog, which is main-thread work (lists,
+     * placeholders), so a modified client sending hundreds must not get
+     * hundreds. Far above what a hand can do.
+     */
+    private static final int CLICKS_PER_SECOND = 10;
     private long closeDelay = 10;
 
     private volatile Map<String, DialogDef> dialogs = Map.of();
@@ -257,14 +270,36 @@ public final class Engine implements DialogEngineAPI {
         drawn.forget(player);
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
+        clickRate.remove(player.getUniqueId());
         clicks.forget(player.getUniqueId());
+    }
+
+    /** Closes the player's dialog, and with it every button it had. */
+    void closeDialog(Player player) {
+        Platform.closeDialog(player);
+        clicks.forget(player.getUniqueId());
+        drawn.retire(player);
+    }
+
+    /**
+     * Whether a click from this player may go ahead: at most
+     * {@link #CLICKS_PER_SECOND} a second. The rest are dropped.
+     */
+    boolean allowClick(Player player) {
+        long second = System.currentTimeMillis() / 1000;
+        long[] rate = clickRate.compute(player.getUniqueId(), (k, r) -> {
+            if (r == null || r[0] != second) return new long[] {second, 1};
+            r[1]++;
+            return r;
+        });
+        return rate[1] <= CLICKS_PER_SECOND;
     }
 
     /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
     void closeUnlessShown(Player player) {
         long before = shown.getOrDefault(player.getUniqueId(), 0L);
         Runnable close = () -> {
-            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) Platform.closeDialog(player);
+            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player);
         };
         if (closeDelay == 0) close.run();
         else Bukkit.getScheduler().runTaskLater(plugin, close, closeDelay);
@@ -274,6 +309,8 @@ public final class Engine implements DialogEngineAPI {
 
     /** Draws a session's dialog. The one place a dialog reaches a player. */
     boolean show(Player player, Session session, boolean reopened) {
+        // A session is one player's: drawn for anybody else, its values would be theirs to act on.
+        if (!player.getUniqueId().equals(session.viewer)) return false;
         if (drawn.has(session.dialogId)) {
             if (!player.isOnline()) return false;
             DialogOpenEvent event = new DialogOpenEvent(player, session.dialogId, session.values, reopened);
@@ -281,6 +318,8 @@ public final class Engine implements DialogEngineAPI {
             if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;
             sessions.put(player.getUniqueId(), session);
             shown.merge(player.getUniqueId(), 1L, Long::sum);
+            // The YAML dialog it replaced is gone from the screen, and its buttons with it.
+            clicks.forget(player.getUniqueId());
             return true;
         }
         DialogDef def = dialogs.get(session.dialogId);
@@ -290,14 +329,18 @@ public final class Engine implements DialogEngineAPI {
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) return false;
         try {
+            long drawing = shown.getOrDefault(player.getUniqueId(), 0L) + 1;
             if (def.json() != null) {
                 showJson(player, def, session);
             } else {
-                Renderer.Drawn drawn = renderer.draw(def, session, player);
+                Renderer.Drawn drawn = renderer.draw(def, session, player, drawing);
                 if (!Platform.showOwn(player, drawn.dialog())) throw new IllegalStateException("no route to the screen");
             }
             sessions.put(player.getUniqueId(), session);
-            shown.merge(player.getUniqueId(), 1L, Long::sum);
+            shown.put(player.getUniqueId(), drawing);
+            // Only the screen the player now has can be pressed: the one before is gone.
+            clicks.retire(player.getUniqueId(), drawing);
+            drawn.retire(player);
             return true;
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.WARNING, "Could not show " + def.id() + " to " + player.getName() + ": " + e.getMessage(), e);
@@ -341,13 +384,30 @@ public final class Engine implements DialogEngineAPI {
 
     // ------------------------------------------------------------------ clicks
 
-    void onClick(Player player, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
+    /**
+     * A button press. {@code drawing} is the drawing the button was bound to,
+     * and the press only counts while that is still the one on the player's
+     * screen. Whatever hid the button when it was drawn ({@code permission:},
+     * {@code if:}) is asked again, because a button can be pressed up to
+     * {@code click-lifetime-minutes} later and the answer may have changed.
+     */
+    void onClick(Player player, long drawing, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
                  List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, Clicks.Payload view) {
         if (!Bukkit.isPrimaryThread()) {
-            Bukkit.getScheduler().runTask(plugin, () -> onClick(player, def, button, session, alias, row, inputs, optionLabels, view));
+            Bukkit.getScheduler().runTask(plugin, () -> onClick(player, drawing, def, button, session, alias, row, inputs, optionLabels, view));
             return;
         }
-        if (!player.isOnline()) return;
+        if (!player.isOnline() || !player.getUniqueId().equals(session.viewer)) return;
+        // An old screen (a newer one has been sent, so the player is about to see
+        // it, and closing would close that), or too many clicks: nothing happens.
+        if (shown.getOrDefault(player.getUniqueId(), 0L) != drawing || !allowClick(player)) return;
+        Scope drawnScope = new Scope(this, player, def.id(), session.values, session.untrusted, null, null);
+        if (alias != null && !row.isEmpty()) drawnScope = drawnScope.withRow(alias, row);
+        if ((button.permission() != null && !player.hasPermission(button.permission())) || !Conditions.test(button.condition(), drawnScope)) {
+            Platform.send(player, Text.MM.deserialize(message("no-permission", "<red>You can't do that.")));
+            if (def.after() == Defs.After.WAIT_FOR_RESPONSE) closeUnlessShown(player);
+            return;
+        }
 
         Map<String, String> typed = new LinkedHashMap<>();
         Set<String> untrusted = new HashSet<>(session.untrusted);
@@ -514,7 +574,7 @@ public final class Engine implements DialogEngineAPI {
     @Override
     public void close(Player player) {
         sessions.remove(player.getUniqueId());
-        Platform.closeDialog(player);
+        closeDialog(player);
     }
 
     @Override

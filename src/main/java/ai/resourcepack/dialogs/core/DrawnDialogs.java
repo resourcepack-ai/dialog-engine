@@ -18,7 +18,11 @@ import org.bukkit.entity.Player;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -50,7 +54,10 @@ import java.util.regex.Pattern;
  * <p>Every OTHER click a drawn dialog makes is a Dialog Engine action list,
  * exactly as a YAML button's {@code actions:}: the command Studio wrote is
  * taken out of the dialog as it loads, kept here, and replaced by
- * {@code /dialogclick act <n>}. So {@code [console]}, {@code [open]},
+ * {@code /dialogclick act <n>}, sent with a nonce drawn for each showing and
+ * good for one click, so typing one into chat does nothing. Only a command
+ * the dialog's {@code dialog.yml} has is kept: Studio drew {@code dialogs.json},
+ * and it does not get to add one. So {@code [console]}, {@code [open]},
  * {@code [message]} and the rest work on a drawn dialog, placeholders are
  * filled when it is clicked rather than baked into what the player holds, and
  * a drawn dialog is a session like any other ({@code [back]}, the API's events).
@@ -62,14 +69,36 @@ final class DrawnDialogs {
     static final String CLICK = "dialogclick";
 
     private static final Gson GSON = new Gson();
-    private static final Pattern ENGINE_CLICK = Pattern.compile("^(/?)(?:rp|rpe|rpengine) (page|var|slot) (.*)$");
+    static final Pattern ENGINE_CLICK = Pattern.compile("^(/?)(?:rp|rpe|rpengine) (page|var|slot) (.*)$");
     private static final Pattern NEXT_ACTION = Pattern.compile(";\\s*(?=\\[)");
+    /** An action click as it is kept, which {@link #showPage} gives the drawing's nonce. */
+    private static final Pattern ACT_CLICK = Pattern.compile("(\"command\":\"/?" + CLICK + " act \\d+)\"");
+    private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** One drawn dialog: its pages by Studio's id for each, the first first, and the action lists its clicks run. */
+    /**
+     * One drawn dialog: its pages by Studio's id for each, the first first, the
+     * action lists its clicks run, and which pages stay up when clicked
+     * ({@code after_action: none}).
+     */
     record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
-                 String command, String permission, List<List<String>> actions, DialogDef def) {}
+                 String command, String permission, List<List<String>> actions, Set<String> staysUp, DialogDef def) {}
 
-    private record Shown(String drawn, String page, Session session) {}
+    /**
+     * The drawing a player was last shown. {@code nonce} is what its action
+     * clicks carry, good for one of them (null once used); {@code permitted}
+     * says the player held the dialog's permission when it was drawn, so losing
+     * it since stops the clicks; {@code live} is false once the dialog has gone
+     * from their screen, when it is kept only to reopen on the same page.
+     */
+    private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live) {
+        Shown used() {
+            return new Shown(drawn, page, session, null, permitted, at, live);
+        }
+
+        Shown retired() {
+            return new Shown(drawn, page, session, null, permitted, at, false);
+        }
+    }
 
     private final Engine engine;
     private DialogVariables variables;
@@ -128,15 +157,26 @@ final class DrawnDialogs {
         File built = new File(dir, "dialogs.json");
         if (!built.isFile()) return null;
         JsonArray list = JsonParser.parseString(Files.readString(built.toPath(), StandardCharsets.UTF_8)).getAsJsonArray();
+        Map<String, Object> spec = DrawnFiles.read(dir.toPath());
+        // Only a command dialog.yml itself has may run: dialogs.json is Studio's
+        // answer, and an answer that came over the network does not get to add one.
+        Set<String> allowed = DrawnFiles.commands(spec);
         Map<String, String> pages = new LinkedHashMap<>();
         Map<String, Set<String>> vars = new LinkedHashMap<>();
+        Set<String> staysUp = new LinkedHashSet<>();
         List<List<String>> actions = new ArrayList<>();
+        List<String> refused = new ArrayList<>();
         String first = null;
         for (JsonElement e : list) {
             JsonObject page = e.getAsJsonObject();
             String studioId = "studio:" + page.get("id").getAsString();
             if (first == null) first = studioId;
-            pages.put(studioId, GSON.toJson(rewrite(page.get("json"), actions)));
+            JsonElement json = page.get("json");
+            if (json instanceof JsonObject o && o.get("after_action") instanceof JsonElement a && a.isJsonPrimitive()
+                    && "none".equals(a.getAsString())) {
+                staysUp.add(studioId);
+            }
+            pages.put(studioId, GSON.toJson(rewrite(json, actions, allowed, refused)));
             if (page.has("vars")) {
                 for (JsonElement v : page.getAsJsonArray("vars")) {
                     Set<String> values = vars.computeIfAbsent(v.getAsJsonObject().get("name").getAsString(), k -> new LinkedHashSet<>());
@@ -145,9 +185,12 @@ final class DrawnDialogs {
             }
         }
         if (first == null) return null;
+        for (String r : refused) {
+            problems.add("drawn/" + id.replace(':', '/') + ": a click runs \"" + r + "\", which its " + DrawnFiles.SOURCE
+                    + " does not have; that click does nothing");
+        }
         String command = null;
         String permission = null;
-        Map<String, Object> spec = DrawnFiles.read(dir.toPath());
         if (spec != null) {
             if (spec.get("command") instanceof String c && !c.isBlank()) command = c.replaceFirst("^/", "").toLowerCase(Locale.ROOT);
             if (spec.get("commandPermission") instanceof String c && !c.isBlank()) permission = c;
@@ -156,17 +199,19 @@ final class DrawnDialogs {
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
                 Map.of(), command, List.of(), permission, List.of(), null, null, Map.of());
-        return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), def);
+        return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp), def);
     }
 
     /**
      * Every command a click runs, as this plugin's: RP Engine's page, var and
      * slot clicks as {@code /dialogclick page|var|slot}, and anything else as
-     * {@code /dialogclick act <n>}, its actions kept in {@code actions}.
+     * {@code /dialogclick act <n>}, its actions kept in {@code actions}. A
+     * command not in {@code allowed} (see {@link DrawnFiles#commands}) gets no
+     * actions, and is named in {@code refused}.
      */
-    static JsonElement rewrite(JsonElement e, List<List<String>> actions) {
+    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused) {
         if (e instanceof JsonArray a) {
-            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions));
+            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions, allowed, refused));
         } else if (e instanceof JsonObject o) {
             boolean runs = (o.has("action") && o.get("action").isJsonPrimitive() && "run_command".equals(o.get("action").getAsString()))
                     || (o.has("type") && o.get("type").isJsonPrimitive() && "minecraft:run_command".equals(o.get("type").getAsString()));
@@ -178,6 +223,10 @@ final class DrawnDialogs {
                 } else {
                     String slash = command.startsWith("/") ? "/" : "";
                     List<String> list = actions(command.substring(slash.length()));
+                    if (!allowed.contains(DrawnFiles.commandText(command))) {
+                        if (!refused.contains(command)) refused.add(command);
+                        list = List.of();
+                    }
                     int n = actions.indexOf(list);
                     if (n < 0) {
                         n = actions.size();
@@ -186,7 +235,7 @@ final class DrawnDialogs {
                     o.addProperty("command", slash + CLICK + " act " + n);
                 }
             }
-            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions));
+            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions, allowed, refused));
         }
         return e;
     }
@@ -237,9 +286,16 @@ final class DrawnDialogs {
     private boolean showPage(Player player, Drawn d, String page, Session session) {
         String json = d.pages.get(page);
         if (json == null) return false;
+        // This drawing's nonce, on every action click: a click typed into chat
+        // without it does nothing, and with it works once.
+        byte[] bytes = new byte[9];
+        RANDOM.nextBytes(bytes);
+        String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        json = ACT_CLICK.matcher(json).replaceAll("$1 " + nonce + "\"");
         json = filled(player, d, json, session.values);
         json = DialogBars.fill(json);
-        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session));
+        boolean permitted = d.permission == null || player.hasPermission(d.permission);
+        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true));
         if (Platform.showJson(player, json, engine.plugin().getLogger())) return true;
         engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ".");
         return false;
@@ -270,19 +326,45 @@ final class DrawnDialogs {
 
     // ------------------------------------------------------------------ clicks
 
-    /** {@code /dialogclick page <id|close>}, {@code var <name> <value> [page]} and {@code act <n>}. */
+    /**
+     * {@code /dialogclick page <id|close>}, {@code var <name> <value> [page]} and
+     * {@code act <n> <nonce>}. Anybody can type these, so each is honoured only
+     * when the drawing on the player's screen holds exactly it, while that
+     * drawing is younger than {@code click-lifetime-minutes}, and (when they
+     * held it then) while they still hold the dialog's permission. An action
+     * click also needs the drawing's nonce, and uses it up.
+     */
     void click(Player player, String[] args) {
-        if (args.length == 0) return;
-        Shown shown = lastShown.get(player.getUniqueId());
-        Drawn d = shown == null ? null : dialogs.get(shown.drawn);
-        String command = CLICK + " " + String.join(" ", args);
+        if (args.length == 0 || !engine.allowClick(player)) return;
+        UUID uuid = player.getUniqueId();
+        Shown shown = lastShown.get(uuid);
+        Drawn d = shown == null || !shown.live ? null : dialogs.get(shown.drawn);
+        boolean act = args[0].equalsIgnoreCase("act");
+        // An action click is held as written, without the nonce it was sent with.
+        String command = CLICK + " " + String.join(" ", act && args.length == 3 ? Arrays.copyOf(args, 2) : args);
         String json = d == null ? null : d.pages.get(shown.page);
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
             if (picture(json, command)) clickSound(player);
-            Platform.closeDialog(player);
+            engine.closeDialog(player);
             return;
         }
         if (d == null || !holds(json, command)) return;
+        if (System.currentTimeMillis() - shown.at > engine.clickLifetime().toMillis()) {
+            retire(player);
+            return;
+        }
+        if (shown.permitted && d.permission != null && !player.hasPermission(d.permission)) {
+            Platform.send(player, Text.MM.deserialize(engine.message("no-permission", "<red>You can't do that.")));
+            retire(player);
+            return;
+        }
+        if (act) {
+            if (args.length != 3 || shown.nonce == null
+                    || !MessageDigest.isEqual(shown.nonce.getBytes(StandardCharsets.UTF_8), args[2].getBytes(StandardCharsets.UTF_8))
+                    || !lastShown.replace(uuid, shown, shown.used())) {
+                return;
+            }
+        }
         if (picture(json, command)) clickSound(player);
         if (args[0].equalsIgnoreCase("page") && args.length == 2) {
             String page = args[1].toLowerCase(Locale.ROOT);
@@ -294,7 +376,7 @@ final class DrawnDialogs {
             variables().set(player, name, value);
             String page = args.length >= 4 ? args[3].toLowerCase(Locale.ROOT) : shown.page;
             Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
-        } else if (args[0].equalsIgnoreCase("act") && args.length == 2) {
+        } else if (act) {
             int n;
             try {
                 n = Integer.parseInt(args[1]);
@@ -307,7 +389,14 @@ final class DrawnDialogs {
                 Map<String, String> values = new LinkedHashMap<>(shown.session.values);
                 for (String var : d.vars.keySet()) variables().get(player, var).ifPresent(v -> values.putIfAbsent(var, v));
                 Session session = shown.session.with(values, shown.session.untrusted);
-                engine.run(new ClickCtx(engine, player, d.def, session, "act_" + n, Map.of(), null, null), d.actions.get(n));
+                ClickCtx ctx = new ClickCtx(engine, player, d.def, session, "act_" + n, Map.of(), null, null);
+                engine.run(ctx, d.actions.get(n));
+                if (ctx.responded || !player.isOnline() || lastShown.get(uuid) == null || lastShown.get(uuid).nonce != null) return;
+                // The nonce is spent. A page that stays up when clicked is drawn
+                // again with a fresh one, so its next click works; any other
+                // page closed itself on the click, and its drawing is over.
+                if (d.staysUp.contains(shown.page)) showPage(player, d, shown.page, shown.session);
+                else retire(player);
             });
         }
     }
@@ -343,6 +432,15 @@ final class DrawnDialogs {
 
     void forget(Player player) {
         lastShown.remove(player.getUniqueId());
+    }
+
+    /**
+     * The player's drawn dialog has gone from their screen (closed, or replaced
+     * by another dialog): none of its clicks work any more. The page they were
+     * on is still remembered, for {@code [back]}.
+     */
+    void retire(Player player) {
+        lastShown.computeIfPresent(player.getUniqueId(), (k, s) -> s.live ? s.retired() : s);
     }
 
     // ------------------------------------------------------------------ commands

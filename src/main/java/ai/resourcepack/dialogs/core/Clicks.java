@@ -17,14 +17,15 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /**
  * Every button that calls back. A drawn button carries a {@code dynamic/custom}
  * action with the id {@link #ID} and a random token; the client sends the token
  * back with the dialog's inputs, and the token finds the click it was drawn for.
- * A token belongs to one player and expires, so a click can only ever do what
- * that player was shown.
+ * A token belongs to one player and one drawing, and expires, so a click can
+ * only ever do what that player was shown on the screen they are looking at:
+ * a new drawing retires every token of the one before ({@link #retire}).
  *
  * <p>Both servers raise an event for such a click, under different names:
  * Spigot's {@code org.bukkit.event.player.PlayerCustomClickEvent} (JSON
@@ -47,18 +48,24 @@ final class Clicks {
         Float number(String key);
     }
 
-    private record Bound(UUID player, long expires, Consumer<Payload> action) {}
+    private record Bound(UUID player, long drawing, long expires, BiConsumer<Player, Payload> action) {}
 
     private final Map<String, Bound> bound = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
-    String bind(Player player, Duration lifetime, Consumer<Payload> action) {
+    /** A token for one button of drawing {@code drawing}; the action is handed the player who clicked. */
+    String bind(Player player, Duration lifetime, long drawing, BiConsumer<Player, Payload> action) {
         if (bound.size() > 2048) purge();
         byte[] bytes = new byte[12];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        bound.put(token, new Bound(player.getUniqueId(), System.currentTimeMillis() + lifetime.toMillis(), action));
+        bound.put(token, new Bound(player.getUniqueId(), drawing, System.currentTimeMillis() + lifetime.toMillis(), action));
         return token;
+    }
+
+    /** Drops every token of the player's except drawing {@code keep}'s: a new screen replaced the old one. */
+    void retire(UUID player, long keep) {
+        bound.values().removeIf(b -> b.player.equals(player) && b.drawing != keep);
     }
 
     /** The action JSON a button carries. */
@@ -95,7 +102,7 @@ final class Clicks {
             bound.remove(token);
             return;
         }
-        b.action.accept(payload);
+        b.action.accept(player, payload);
     }
 
     // ------------------------------------------------------------------ listening

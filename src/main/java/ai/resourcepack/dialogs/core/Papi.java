@@ -24,6 +24,11 @@ final class Papi {
         }
     }
 
+    /** Whether PlaceholderAPI is installed, so a fill has to keep typed values away from it. */
+    static boolean available() {
+        return method() != null;
+    }
+
     static void reset() {
         probed = false;
         set = null;

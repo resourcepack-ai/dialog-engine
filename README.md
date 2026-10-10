@@ -39,7 +39,8 @@ a settings page, plus a menu of them all. Open the menu with
 
 In the browser: `/de edit <namespace:id>` opens it in Studio's dialog editor
 (no account) and Send to server writes it back under its key, leaving the rest
-of the file alone. `edit.url` in config.yml says where the editor is.
+of the file alone. `edit.url` in config.yml says where the editor is, and must
+be https (plain http only for one on the same machine).
 
 
 With an AI: hand it `plugins/DialogEngine/AI-GUIDE.md`, which the plugin
@@ -164,6 +165,7 @@ Run in order. A line without a `[tag]` is a command the player runs.
   `{player_y}` `{player_z}` `{player_health}` `{player_level}`
   `{player_gamemode}` `{online}` `{max_players}` `{dialog}`.
 - Whatever a plugin registered, and every PlaceholderAPI `%placeholder%`.
+  One in what a player typed is printed as typed, never filled.
 - **A choice**: `{mode?on:Enabled|off:Disabled|Unknown}` prints the words for
   the value `mode` has, and the last entry when none matches. `$value` in the
   words prints the value itself.
@@ -276,9 +278,16 @@ Everything a plugin registers is dropped when it disables.
 
 Every button is a server callback bound to the drawing of the dialog the
 player saw: the values it was drawn with, and its inputs. Nothing a player can
-type in chat presses a button, and a click on an old screen acts on what that
-screen showed. Buttons stop working `click-lifetime-minutes` after the dialog
-was drawn.
+type in chat presses a button. Only the latest drawing can be pressed: a new
+one (another dialog, a refresh, a failed check) retires the buttons of the one
+before. A button's `permission:` and `if:` are asked again when it is pressed,
+so one that has since stopped applying does nothing. Buttons stop working
+`click-lifetime-minutes` after the dialog was drawn, and a player gets at most
+ten clicks a second.
+
+A drawn dialog's clicks (`/de edit`) are the same: each action click works
+once per showing, only while that dialog is on the player's screen, and only
+runs a command that is in its `dialog.yml`.
 
 Under `after: wait` (the default) the client shows a waiting screen until the
 engine answers, so one dialog replaces another with no flash of the world in

@@ -2,6 +2,9 @@ package ai.resourcepack.dialogs.core;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
@@ -68,9 +71,30 @@ final class EditSessions {
         this.plugin = engine.plugin();
     }
 
-    private String base() {
+    /**
+     * {@code edit.url}, which must be https: what comes back from it is written
+     * into the plugin's folder and decides what a drawn dialog's clicks run, so
+     * nobody between here and there may change it. Plain http only reaches a
+     * Studio on this machine.
+     */
+    private String base() throws IOException {
         String url = plugin.getConfig().getString("edit.url", "https://studio.resourcepack.ai");
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("edit.url is not a URL");
+        }
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+        if (scheme.equals("https") || (scheme.equals("http") && local(uri.getHost()))) return url;
+        throw new IOException("edit.url must start with https:// (http:// only for localhost)");
+    }
+
+    private static boolean local(String host) {
+        if (host == null) return false;
+        String h = host.toLowerCase(Locale.ROOT);
+        return h.equals("localhost") || h.equals("127.0.0.1") || h.equals("[::1]") || h.equals("::1");
     }
 
     private void say(CommandSender to, String mini) {
@@ -122,12 +146,17 @@ final class EditSessions {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 EditWire.Opened opened = GSON.fromJson(request("POST", "/api/rpengine/session", body, null), EditWire.Opened.class);
+                String link = opened.url == null ? "" : opened.url;
+                if (!link.startsWith("https://") && !link.startsWith("http://")) throw new IOException("Studio answered with no link");
                 sessions.put(opened.id, new Live(opened.id, opened.pullToken, parse(opened.expiresAt), dir, name, dialogId, opener, opened.revision));
                 ensurePolling();
+                // The link goes in as a click event, never into the MiniMessage: it came over the network.
+                Component editor = Text.MM.deserialize("<hover:show_text:'Open the dialog editor'><#3670f8><u>open the editor</u></#3670f8></hover>")
+                        .clickEvent(ClickEvent.openUrl(link));
                 Bukkit.getScheduler().runTask(plugin, () -> Platform.send(sender, Text.MM.deserialize(
                         "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>Edit <white>" + dialogId + "</white>: "
-                                + "<click:open_url:'" + opened.url + "'><hover:show_text:'Open the dialog editor'><#3670f8><u>open the editor</u></#3670f8></hover></click>"
-                                + "<dark_gray>. The link works once and lasts three hours; press Send to server to bring it back here.</dark_gray>")));
+                                + "<editor><dark_gray>. The link works once and lasts three hours; press Send to server to bring it back here.</dark_gray>",
+                        Placeholder.component("editor", editor))));
             } catch (Exception e) {
                 Bukkit.getScheduler().runTask(plugin, () -> say(sender, "<red>Could not open the editor: " + Text.MM.escapeTags(String.valueOf(e.getMessage()))));
             }
@@ -177,6 +206,14 @@ final class EditSessions {
             say(tell, "<red>The editor sent back something for a different dialog; nothing was written.");
             return;
         }
+        // What the edit makes clicks run that the dialog did not before, said out
+        // loud: the link was handed out, and whoever holds it can write these.
+        List<String> added;
+        try {
+            added = DrawnFiles.invented(GSON.toJsonTree(pull.dialog.built), DrawnFiles.commands(DrawnFiles.read(live.file.toPath())));
+        } catch (Exception e) {
+            added = List.of();
+        }
         try {
             DrawnFiles.writeDrawing(live.file.toPath(), pull, true);
         } catch (Exception e) {
@@ -190,6 +227,13 @@ final class EditSessions {
         say(tell, "Saved <white>" + live.dialogId + "</white> from the editor"
                 + (problems.isEmpty() ? ". <click:run_command:'/de open " + live.dialogId + "'><#3670f8><u>Open it</u></#3670f8></click>" : ", with problems:"));
         for (String p : problems) Platform.send(tell, Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
+        if (!added.isEmpty()) {
+            say(tell, "Its clicks now also run:");
+            for (String c : added) {
+                Platform.send(tell, Text.MM.deserialize("<yellow> - </yellow><white>" + Text.MM.escapeTags(c)));
+                plugin.getLogger().info(live.dialogId + " was edited to run: " + c);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ redrawing
