@@ -3,7 +3,6 @@ package ai.resourcepack.dialogs.core;
 import ai.resourcepack.dialogs.api.ActionHandler;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -80,21 +79,21 @@ final class Actions {
             case "console" -> {
                 if (!arg.isEmpty()) Bukkit.dispatchCommand(Bukkit.getConsoleSender(), stripSlash(arg));
             }
-            case "message", "msg" -> p.sendMessage(Text.MM.deserialize(arg));
-            case "broadcast" -> Bukkit.broadcast(Text.MM.deserialize(arg));
-            case "actionbar" -> p.sendActionBar(Text.MM.deserialize(arg));
+            case "message", "msg" -> Platform.send(p, Text.MM.deserialize(arg));
+            case "broadcast" -> Platform.broadcast(Text.MM.deserialize(arg));
+            case "actionbar" -> Platform.actionBar(p, Text.MM.deserialize(arg));
             case "title" -> {
                 int bar = arg.indexOf('|');
                 Component title = Text.MM.deserialize(bar < 0 ? arg : arg.substring(0, bar).trim());
                 Component sub = bar < 0 ? Component.empty() : Text.MM.deserialize(arg.substring(bar + 1).trim());
-                p.showTitle(Title.title(title, sub));
+                Platform.title(p, title, sub);
             }
             case "sound" -> {
                 String[] parts = arg.split("\\s+");
                 if (parts.length == 0 || parts[0].isEmpty()) return true;
                 float volume = parts.length > 1 ? (float) parseDouble(parts[1], 1) : 1f;
                 float pitch = parts.length > 2 ? (float) parseDouble(parts[2], 1) : 1f;
-                p.playSound(p.getLocation(), parts[0].toLowerCase(Locale.ROOT), volume, pitch);
+                Platform.sound(p, parts[0].toLowerCase(Locale.ROOT), volume, pitch);
             }
             case "open", "dialog" -> {
                 // Split as written, then fill each piece: a value with spaces in it stays one value.
@@ -152,14 +151,14 @@ final class Actions {
                 // Mixed in with other actions, so it cannot be the button's own click:
                 // hand the link over in chat instead.
                 String url = arg.startsWith("http://") || arg.startsWith("https://") ? arg : "https://" + arg;
-                p.sendMessage(Text.MM.deserialize(engine.message("link", "<gray>Open: <aqua><u>{url}</u></aqua>")
+                Platform.send(p, Text.MM.deserialize(engine.message("link", "<gray>Open: <aqua><u>{url}</u></aqua>")
                         .replace("{url}", Text.MM.escapeTags(url))).clickEvent(ClickEvent.openUrl(url)));
             }
             case "copy", "suggest" -> engine.warnOnce(ctx.def.id() + ": [" + tag + "] only works as a button's only action");
             case "permission" -> {
                 // [permission] node: stop here unless the player has it.
                 if (!arg.isEmpty() && !p.hasPermission(arg)) {
-                    p.sendMessage(Text.MM.deserialize(engine.message("no-permission", "<red>You can't do that.")));
+                    Platform.send(p, Text.MM.deserialize(engine.message("no-permission", "<red>You can't do that.")));
                     ctx.stop();
                 }
             }

@@ -1,6 +1,6 @@
 # Dialog Engine: a guide for AI agents
 
-You are writing dialogs for **Dialog Engine**, a Paper plugin that turns YAML
+You are writing dialogs for **Dialog Engine**, a Spigot and Paper plugin that turns YAML
 files into Minecraft's own dialog screens (1.21.6+). This file is everything
 you need. The person you are working for will drop what you write into their
 server and run `/de reload`.

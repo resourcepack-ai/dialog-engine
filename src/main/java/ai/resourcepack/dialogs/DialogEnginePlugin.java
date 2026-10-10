@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * Dialog Engine: Minecraft's dialog screens, written in YAML and driven from
- * Java. Needs Paper 1.21.7 or newer: the dialog API it builds on is Paper's.
+ * Java. Runs on Spigot and Paper 1.21.7 or newer, from one jar.
  */
 public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
@@ -34,10 +34,11 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        try {
-            Class.forName("io.papermc.paper.dialog.Dialog");
-        } catch (ClassNotFoundException e) {
-            getLogger().severe("Dialog Engine needs Paper 1.21.7 or newer (dialogs arrived in Minecraft 1.21.6, Paper's API for them in 1.21.7). Disabling.");
+        engine = new Engine(this);
+        String clicks = engine.listenForClicks();
+        if (clicks == null) {
+            getLogger().severe("Dialog Engine needs Spigot or Paper 1.21.7 or newer (dialogs arrived in Minecraft 1.21.6). Disabling.");
+            engine = null;
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -53,7 +54,6 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
             for (String name : SAMPLES) saveResource("dialogs/samples/" + name, false);
         }
 
-        engine = new Engine(this);
         engine.load();
         DialogEngine.set(engine);
 
@@ -72,17 +72,16 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
             de.setTabCompleter(admin);
         }
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("Loaded " + engine.ids().size() + " dialogs.");
+        getLogger().info("Loaded " + engine.ids().size() + " dialogs. Showing them through " + engine.route() + ", clicks through " + clicks + "'s event.");
 
         updates = ai.resourcepack.common.update.UpdateCheck.spigot(this, SPIGOT_RESOURCE)
                 .name("Dialog Engine")
                 .permission("dialogengine.update")
                 .enabledWhen(() -> getConfig().getBoolean("update-check", true))
-                .player((player, update) -> player.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage
-                        .miniMessage().deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> "
+                .player((player, update) -> Engine.tell(player, "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> "
                                 + "<gray>Dialog Engine <#3670f8>" + update.latest() + "</#3670f8> is out (you have "
                                 + update.running() + "). <#3670f8><u><click:open_url:'" + update.url()
-                                + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>")))
+                                + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>"))
                 .start();
 
         // Anonymous usage counting, the only telemetry this plugin has: a

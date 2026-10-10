@@ -66,8 +66,7 @@ final class Scope implements DialogContext {
         return switch (key) {
             case "player", "player_name" -> viewer.getName();
             case "player_uuid" -> viewer.getUniqueId().toString();
-            case "player_display" -> net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-                    .serialize(viewer.displayName());
+            case "player_display" -> org.bukkit.ChatColor.stripColor(viewer.getDisplayName());
             case "player_world" -> viewer.getWorld().getName();
             case "player_x" -> String.valueOf(viewer.getLocation().getBlockX());
             case "player_y" -> String.valueOf(viewer.getLocation().getBlockY());

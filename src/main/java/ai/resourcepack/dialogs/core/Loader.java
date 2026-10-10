@@ -9,7 +9,6 @@ import ai.resourcepack.dialogs.core.Defs.InputDef;
 import ai.resourcepack.dialogs.core.Defs.InputKind;
 import ai.resourcepack.dialogs.core.Defs.OptionDef;
 import ai.resourcepack.dialogs.core.Defs.Type;
-import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -34,9 +33,9 @@ final class Loader {
     static final Pattern COMMAND = Pattern.compile("[a-z0-9_\\-]{1,32}");
 
     final List<String> problems = new ArrayList<>();
-    private final DialogAfterAction defaultAfter;
+    private final Defs.After defaultAfter;
 
-    Loader(DialogAfterAction defaultAfter) {
+    Loader(Defs.After defaultAfter) {
         this.defaultAfter = defaultAfter;
     }
 
@@ -166,9 +165,9 @@ final class Loader {
             if (COMMAND.matcher(a).matches()) aliases.add(a);
         }
 
-        DialogAfterAction after = after(s.getString("after"), source, id);
+        Defs.After after = after(s.getString("after"), source, id);
         boolean pause = s.getBoolean("pause", false);
-        if (pause && after == DialogAfterAction.NONE) {
+        if (pause && after == Defs.After.NONE) {
             problems.add(source + ": " + id + " cannot pause with after: none (the game refuses it); pause is off");
             pause = false;
         }
@@ -219,12 +218,12 @@ final class Loader {
         };
     }
 
-    private DialogAfterAction after(String raw, String source, String id) {
+    private Defs.After after(String raw, String source, String id) {
         if (raw == null) return defaultAfter;
         return switch (raw.toLowerCase(Locale.ROOT).replace('-', '_')) {
-            case "close" -> DialogAfterAction.CLOSE;
-            case "none", "stay" -> DialogAfterAction.NONE;
-            case "wait", "wait_for_response" -> DialogAfterAction.WAIT_FOR_RESPONSE;
+            case "close" -> Defs.After.CLOSE;
+            case "none", "stay" -> Defs.After.NONE;
+            case "wait", "wait_for_response" -> Defs.After.WAIT_FOR_RESPONSE;
             default -> {
                 problems.add(source + ": " + id + " has unknown after '" + raw + "'");
                 yield defaultAfter;
@@ -307,6 +306,10 @@ final class Loader {
         String key = in.getString("key", in.getString("id"));
         if (key == null || !key.matches("[A-Za-z0-9_]+")) {
             problems.add(source + ": " + id + " has an input without a usable key (letters, digits and _)");
+            return null;
+        }
+        if (key.equalsIgnoreCase(Clicks.TOKEN)) {
+            problems.add(source + ": " + id + " has an input called " + key + ", which Dialog Engine keeps for itself");
             return null;
         }
         String rawType = in.getString("type", "text").toLowerCase(Locale.ROOT).replace('-', '_');

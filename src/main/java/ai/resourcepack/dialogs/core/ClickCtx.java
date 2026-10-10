@@ -2,7 +2,6 @@ package ai.resourcepack.dialogs.core;
 
 import ai.resourcepack.dialogs.api.ClickContext;
 import ai.resourcepack.dialogs.core.Defs.DialogDef;
-import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
 import org.bukkit.entity.Player;
 
 import java.util.Collections;
@@ -51,7 +50,7 @@ final class ClickCtx implements ClickContext {
      * get one, or the player is left looking at "waiting for the server".
      */
     void finish() {
-        if (responded || def.after() != DialogAfterAction.WAIT_FOR_RESPONSE || !player.isOnline()) return;
+        if (responded || def.after() != Defs.After.WAIT_FOR_RESPONSE || !player.isOnline()) return;
         responded = true;
         // Not straight away: an action may have asked a plugin to open the next
         // dialog a moment from now (after a database read, say). Closing first
@@ -160,7 +159,7 @@ final class ClickCtx implements ClickContext {
 
     @Override
     public void close() {
-        player.closeDialog();
+        Platform.closeDialog(player);
         responded = true;
     }
 

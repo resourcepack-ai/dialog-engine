@@ -1,7 +1,9 @@
 package ai.resourcepack.dialogs.core;
 
+import com.google.gson.JsonElement;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
 /**
  * Placeholder filling. {@code {key}} is a value; {@code {key?a:Words|b:Other|Default}}
@@ -27,6 +29,15 @@ final class Text {
     static Component component(String raw, Scope scope) {
         if (raw == null || raw.isEmpty()) return Component.empty();
         return MM.deserialize(fill(raw, scope, Mode.TEXT));
+    }
+
+    /** MiniMessage, filled, as the game's JSON text component (what a dialog JSON holds). */
+    static JsonElement json(String raw, Scope scope) {
+        return json(component(raw, scope));
+    }
+
+    static JsonElement json(Component component) {
+        return GsonComponentSerializer.gson().serializeToTree(component);
     }
 
     static String fill(String raw, Scope scope, Mode mode) {

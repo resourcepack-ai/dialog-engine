@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'ai.resourcepack'
-version = '0.2.1'
+version = '0.3.0'
 
 java {
     toolchain {
@@ -20,7 +20,9 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     mavenCentral()
-    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    // spigot-api: the one API both servers have. Paper keeps Spigot's API, so
+    // compiling against it is what makes one jar run on both.
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     // ai.resourcepack:common, our own shared plugin library. Exclusive: the
     // ai.resourcepack group is looked for here and nowhere else, so a
     // look-alike published to Central or any repository above cannot stand in
@@ -37,7 +39,26 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:1.21.8-R0.1-SNAPSHOT'
+    compileOnly 'org.spigotmc:spigot-api:1.21.8-R0.1-SNAPSHOT'
+
+    // MiniMessage and Adventure, shaded and relocated: Spigot has neither, and
+    // Paper's own copy is left alone (ours never meets it). Gson is the
+    // server's on both, so it is not shaded.
+    implementation('net.kyori:adventure-api:4.24.0') { exclude group: 'org.jetbrains' }
+    implementation('net.kyori:adventure-text-minimessage:4.24.0') { exclude group: 'org.jetbrains' }
+    implementation('net.kyori:adventure-text-serializer-gson:4.24.0') {
+        exclude group: 'com.google.code.gson'
+        exclude group: 'org.jetbrains'
+    }
+    implementation('net.kyori:adventure-text-serializer-plain:4.24.0') { exclude group: 'org.jetbrains' }
+    implementation('net.kyori:adventure-text-serializer-legacy:4.24.0') { exclude group: 'org.jetbrains' }
+    // Adventure -> BungeeCord chat, which is what player.spigot().sendMessage
+    // and Spigot's dialog API take. Both servers ship BungeeCord chat.
+    implementation('net.kyori:adventure-text-serializer-bungeecord:4.4.1') {
+        exclude group: 'com.google.code.gson'
+        exclude group: 'net.md-5'
+        exclude group: 'org.jetbrains'
+    }
 
     // The small library every ResourcePack AI plugin shades in (the update
     // check, for one), relocated below so it never meets another plugin's copy.
@@ -47,6 +68,7 @@ dependencies {
 shadowJar {
     archiveClassifier.set('')
     relocate 'ai.resourcepack.common', 'ai.resourcepack.dialogs.libs.common'
+    relocate 'net.kyori', 'ai.resourcepack.dialogs.libs.kyori'
 }
 
 // The shaded jar is the plugin; the plain one would only be a second file in

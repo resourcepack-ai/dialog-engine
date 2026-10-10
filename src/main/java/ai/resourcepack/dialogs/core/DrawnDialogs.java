@@ -2,19 +2,14 @@ package ai.resourcepack.dialogs.core;
 
 import ai.resourcepack.dialogs.core.Defs.DialogDef;
 import ai.resourcepack.dialogs.drawn.DialogBars;
-import ai.resourcepack.dialogs.drawn.DialogPackets;
 import ai.resourcepack.dialogs.drawn.DialogPlaceholders;
 import ai.resourcepack.dialogs.drawn.DialogRows;
-import ai.resourcepack.dialogs.drawn.DialogSnbt;
 import ai.resourcepack.dialogs.drawn.DialogVariables;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
-import net.kyori.adventure.key.Key;
-import net.kyori.adventure.sound.Sound;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -159,7 +154,7 @@ final class DrawnDialogs {
         }
         String ns = id.substring(0, id.indexOf(':'));
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
-                Defs.Type.MULTI_ACTION, 1, true, false, DialogAfterAction.NONE, List.of(), List.of(), List.of(), null,
+                Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
                 Map.of(), command, List.of(), permission, List.of(), null, null, Map.of());
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), def);
     }
@@ -245,12 +240,8 @@ final class DrawnDialogs {
         json = filled(player, d, json, session.values);
         json = DialogBars.fill(json);
         lastShown.put(player.getUniqueId(), new Shown(d.id, page, session));
-        if (DialogPackets.show(player, json)) return true;
-        Optional<String> inline = DialogSnbt.of(json);
-        if (inline.isPresent()) {
-            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:dialog show " + player.getName() + " " + inline.get());
-        }
-        engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ": " + DialogPackets.lastRefusal());
+        if (Platform.showJson(player, json, engine.plugin().getLogger())) return true;
+        engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ".");
         return false;
     }
 
@@ -288,7 +279,7 @@ final class DrawnDialogs {
         String json = d == null ? null : d.pages.get(shown.page);
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
             if (picture(json, command)) clickSound(player);
-            player.closeDialog();
+            Platform.closeDialog(player);
             return;
         }
         if (d == null || !holds(json, command)) return;
@@ -336,7 +327,7 @@ final class DrawnDialogs {
         String sound = engine.plugin().getConfig().getString("click-sound", "ui.button.click");
         if (sound == null || sound.isBlank()) return;
         try {
-            player.playSound(Sound.sound(Key.key(sound.toLowerCase(Locale.ROOT)), Sound.Source.MASTER, 0.25f, 1f), Sound.Emitter.self());
+            Platform.sound(player, sound.toLowerCase(Locale.ROOT), 0.25f, 1f);
         } catch (RuntimeException e) {
             // A sound name that is not a key: no sound, rather than no click.
         }
@@ -357,7 +348,7 @@ final class DrawnDialogs {
     // ------------------------------------------------------------------ commands
 
     private void registerCommands() {
-        var map = Bukkit.getCommandMap();
+        var map = Platform.commandMap();
         // Out of the known commands too, or the last load's command (and the
         // permission it was built with) keeps the name until a restart.
         for (Command c : commands) OpenCommands.unregister(map, c);
@@ -372,7 +363,7 @@ final class DrawnDialogs {
                         return true;
                     }
                     if (d.permission != null && !p.hasPermission(d.permission)) {
-                        p.sendMessage(Text.MM.deserialize("<red>You cannot open that."));
+                        Platform.send(p, Text.MM.deserialize("<red>You cannot open that."));
                         return true;
                     }
                     Map<String, String> values = new LinkedHashMap<>();
@@ -432,13 +423,12 @@ final class DrawnDialogs {
 
     private void say(CommandSender to, String mini) {
         // The console always hears it: whoever asked may have gone (an RCON reload has).
-        engine.plugin().getLogger().info(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-                .serialize(Text.MM.deserialize(mini)));
-        if (to instanceof Player p && p.isOnline()) p.sendMessage(Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
+        engine.plugin().getLogger().info(Platform.plain(Text.MM.deserialize(mini)));
+        if (to instanceof Player p && p.isOnline()) Platform.send(p, Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
     }
 
     void shutdown() {
-        var map = Bukkit.getCommandMap();
+        var map = Platform.commandMap();
         for (Command c : commands) OpenCommands.unregister(map, c);
         commands.clear();
     }

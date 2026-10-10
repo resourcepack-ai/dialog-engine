@@ -5,8 +5,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpServer;
-import net.kyori.adventure.resource.ResourcePackInfo;
-import net.kyori.adventure.resource.ResourcePackRequest;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -15,7 +13,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -210,14 +207,9 @@ final class DrawnPack {
     void send(Player player) {
         if (zip == null || !cfg().getBoolean("send", true)) return;
         try {
-            ResourcePackInfo info = ResourcePackInfo.resourcePackInfo().id(PACK_ID).uri(URI.create(url())).hash(sha1).build();
-            ResourcePackRequest request = ResourcePackRequest.resourcePackRequest()
-                    .packs(info)
-                    .replace(false)
-                    .required(cfg().getBoolean("required", false))
-                    .prompt(Text.MM.deserialize(cfg().getString("prompt", "<gray>This server's menus are drawn with a small resource pack.")))
-                    .build();
-            player.sendResourcePacks(request);
+            // Added beside the server's own pack, never replacing it.
+            String prompt = Platform.legacy(Text.MM.deserialize(cfg().getString("prompt", "<gray>This server's menus are drawn with a small resource pack.")));
+            player.addResourcePack(PACK_ID, url(), HexFormat.of().parseHex(sha1), prompt, cfg().getBoolean("required", false));
         } catch (RuntimeException e) {
             engine.plugin().getLogger().warning("Could not send the drawn dialog pack to " + player.getName() + ": " + e.getMessage());
         }

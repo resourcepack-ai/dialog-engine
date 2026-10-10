@@ -97,8 +97,14 @@ public interface DialogEngineAPI {
     /** Escapes text so MiniMessage prints it as written. */
     String escape(String untrusted);
 
-    /** Parses MiniMessage with the engine's placeholder rules, for a plugin that wants its own messages to match. */
-    net.kyori.adventure.text.Component text(Player viewer, String miniMessage, Map<String, String> values);
+    /**
+     * Parses MiniMessage with the engine's placeholder rules, for a plugin that
+     * wants its own messages to match, and returns the game's JSON text
+     * component. On Paper, {@code GsonComponentSerializer.gson().deserialize(json)}
+     * makes it a Component; on Spigot, {@code ComponentSerializer.deserialize(json)}
+     * makes it BungeeCord chat.
+     */
+    String textJson(Player viewer, String miniMessage, Map<String, String> values);
 
     /** Reads every dialog again, then fires {@link ai.resourcepack.dialogs.api.event.DialogEngineReloadEvent}. */
     void reload();

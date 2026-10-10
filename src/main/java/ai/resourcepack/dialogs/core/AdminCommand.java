@@ -24,7 +24,7 @@ public final class AdminCommand implements TabExecutor {
     }
 
     private void say(CommandSender to, String mini) {
-        to.sendMessage(Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
+        Platform.send(to, Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
     }
 
     @Override
@@ -37,7 +37,7 @@ public final class AdminCommand implements TabExecutor {
                 List<String> problems = engine.problems();
                 say(sender, "Loaded <white>" + engine.ids().size() + "</white> dialogs"
                         + (problems.isEmpty() ? "." : ", with <yellow>" + problems.size() + "</yellow> problems:"));
-                for (String p : problems) sender.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
+                for (String p : problems) Platform.send(sender, Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
                 int stale = engine.drawn.staleCount();
                 if (stale > 0) say(sender, "Redrawing <white>" + stale + "</white> drawn dialog" + (stale == 1 ? "" : "s") + " edited by hand...");
             }
@@ -75,7 +75,7 @@ public final class AdminCommand implements TabExecutor {
                             + " <#3670f8>(drawn)</#3670f8>" + (cmd != null ? " <dark_gray>(/" + cmd + ")</dark_gray>" : ""));
                 }
                 say(sender, "<white>" + engine.ids().size() + "</white> dialogs:");
-                byNamespace.forEach((ns, names) -> sender.sendMessage(Text.MM.deserialize(
+                byNamespace.forEach((ns, names) -> Platform.send(sender, Text.MM.deserialize(
                         "<#3670f8>" + ns + "</#3670f8><dark_gray>:</dark_gray> <gray>" + String.join("<dark_gray>,</dark_gray> ", names))));
             }
             case "open" -> {
@@ -126,7 +126,7 @@ public final class AdminCommand implements TabExecutor {
                     return true;
                 }
                 say(sender, "<white>" + d.id() + "</white> from <white>" + Text.MM.escapeTags(d.source()) + "</white>");
-                sender.sendMessage(Text.MM.deserialize("<gray> type " + d.type().name().toLowerCase(Locale.ROOT)
+                Platform.send(sender, Text.MM.deserialize("<gray> type " + d.type().name().toLowerCase(Locale.ROOT)
                         + ", " + d.buttons().size() + " buttons, " + d.inputs().size() + " inputs, " + d.body().size() + " body entries"
                         + (d.command() != null ? ", /" + d.command() : "")
                         + (d.permission() != null ? ", needs " + d.permission() : "")

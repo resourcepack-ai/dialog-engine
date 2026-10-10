@@ -16,9 +16,6 @@ import ai.resourcepack.dialogs.core.Defs.InputDef;
 import ai.resourcepack.dialogs.core.Defs.InputKind;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
-import io.papermc.paper.dialog.DialogResponseView;
-import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
-import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
@@ -57,6 +54,7 @@ public final class Engine implements DialogEngineAPI {
     private final JavaPlugin plugin;
     private final Renderer renderer = new Renderer(this);
     private final Actions actions = new Actions(this);
+    private final Clicks clicks = new Clicks();
     private final OpenCommands commands;
 
     private final List<Folder> folders = new ArrayList<>();
@@ -76,7 +74,7 @@ public final class Engine implements DialogEngineAPI {
 
     private Duration clickLifetime = Duration.ofMinutes(30);
     private String validationFormat = "<red>{error}";
-    private DialogAfterAction defaultAfter = DialogAfterAction.WAIT_FOR_RESPONSE;
+    private Defs.After defaultAfter = Defs.After.WAIT_FOR_RESPONSE;
 
     public Engine(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -94,9 +92,9 @@ public final class Engine implements DialogEngineAPI {
         validationFormat = cfg.getString("validation-format", "<red>{error}");
         closeDelay = Math.max(0, cfg.getLong("close-delay-ticks", 10));
         defaultAfter = switch (cfg.getString("default-after", "wait").toLowerCase(Locale.ROOT)) {
-            case "close" -> DialogAfterAction.CLOSE;
-            case "none", "stay" -> DialogAfterAction.NONE;
-            default -> DialogAfterAction.WAIT_FOR_RESPONSE;
+            case "close" -> Defs.After.CLOSE;
+            case "none", "stay" -> Defs.After.NONE;
+            default -> Defs.After.WAIT_FOR_RESPONSE;
         };
         Papi.reset();
         jsonCache.clear();
@@ -192,6 +190,25 @@ public final class Engine implements DialogEngineAPI {
         return plugin;
     }
 
+    Clicks clicks() {
+        return clicks;
+    }
+
+    /** Starts listening for button presses. Returns which server's click event it found, or null for none. */
+    public String listenForClicks() {
+        return clicks.listen(plugin);
+    }
+
+    /** How dialogs reach the screen on this server, for the startup line. */
+    public String route() {
+        return Platform.describe();
+    }
+
+    /** Sends MiniMessage to a player or the console, the way every message of ours goes. */
+    public static void tell(org.bukkit.command.CommandSender to, String miniMessage) {
+        Platform.send(to, Text.MM.deserialize(miniMessage));
+    }
+
     Duration clickLifetime() {
         return clickLifetime;
     }
@@ -233,19 +250,21 @@ public final class Engine implements DialogEngineAPI {
         drawnPack.stop();
         commands.clear();
         sessions.clear();
+        clicks.clear();
     }
 
     public void forget(Player player) {
         drawn.forget(player);
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
+        clicks.forget(player.getUniqueId());
     }
 
     /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
     void closeUnlessShown(Player player) {
         long before = shown.getOrDefault(player.getUniqueId(), 0L);
         Runnable close = () -> {
-            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) player.closeDialog();
+            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) Platform.closeDialog(player);
         };
         if (closeDelay == 0) close.run();
         else Bukkit.getScheduler().runTaskLater(plugin, close, closeDelay);
@@ -275,14 +294,14 @@ public final class Engine implements DialogEngineAPI {
                 showJson(player, def, session);
             } else {
                 Renderer.Drawn drawn = renderer.draw(def, session, player);
-                player.showDialog(drawn.dialog());
+                if (!Platform.showOwn(player, drawn.dialog())) throw new IllegalStateException("no route to the screen");
             }
             sessions.put(player.getUniqueId(), session);
             shown.merge(player.getUniqueId(), 1L, Long::sum);
             return true;
         } catch (RuntimeException e) {
             plugin.getLogger().log(Level.WARNING, "Could not show " + def.id() + " to " + player.getName() + ": " + e.getMessage(), e);
-            player.sendMessage(Text.MM.deserialize(message("broken", "<red>That dialog could not be shown. The console says why.")));
+            Platform.send(player, Text.MM.deserialize(message("broken", "<red>That dialog could not be shown. The console says why.")));
             return false;
         }
     }
@@ -299,7 +318,7 @@ public final class Engine implements DialogEngineAPI {
         String filled = Text.fill(raw, scope, Text.Mode.JSON);
         // Minified, so the inline argument is one line. The game's SNBT reads JSON objects.
         String json = new Gson().toJson(JsonParser.parseString(filled));
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:dialog show " + player.getUniqueId() + " " + json);
+        Platform.showJson(player, json, null);
     }
 
     /** Opens a dialog the way a player asked for it: with the permission check, and with their words untrusted. */
@@ -307,11 +326,11 @@ public final class Engine implements DialogEngineAPI {
         DialogDef def = dialogs.get(id);
         if (def == null && drawn.has(id)) def = drawn.get(id).map(DrawnDialogs.Drawn::def).orElse(null);
         if (def == null) {
-            player.sendMessage(Text.MM.deserialize(message("unknown-dialog", "<red>There is no dialog called {id}.").replace("{id}", Text.MM.escapeTags(id))));
+            Platform.send(player, Text.MM.deserialize(message("unknown-dialog", "<red>There is no dialog called {id}.").replace("{id}", Text.MM.escapeTags(id))));
             return false;
         }
         if (def.permission() != null && !player.hasPermission(def.permission())) {
-            player.sendMessage(Text.MM.deserialize(message("no-permission", "<red>You can't open that.")));
+            Platform.send(player, Text.MM.deserialize(message("no-permission", "<red>You can't open that.")));
             return false;
         }
         Session s = previous == null
@@ -323,7 +342,7 @@ public final class Engine implements DialogEngineAPI {
     // ------------------------------------------------------------------ clicks
 
     void onClick(Player player, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
-                 List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, DialogResponseView view) {
+                 List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, Clicks.Payload view) {
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(plugin, () -> onClick(player, def, button, session, alias, row, inputs, optionLabels, view));
             return;
@@ -341,18 +360,18 @@ public final class Engine implements DialogEngineAPI {
                     case TEXT -> {
                         // The client enforces max-length, so a modified one need not:
                         // clip here, before validation, actions or a pattern see it.
-                        v = view.getText(key);
+                        v = view.text(key);
                         if (v != null && v.length() > in.maxLength()) v = v.substring(0, in.maxLength());
                     }
                     case OPTIONS -> {
-                        v = view.getText(key);
+                        v = view.text(key);
                         Map<String, String> labels = optionLabels.getOrDefault(key, Map.of());
                         // A modified client can send anything: only an option we drew counts.
                         if (v != null && !labels.containsKey(v)) v = null;
                         if (v != null) values.put(key + ".label", labels.get(v));
                     }
                     case TOGGLE -> {
-                        Boolean b = view.getBoolean(key);
+                        Boolean b = view.bool(key);
                         if (b != null) {
                             v = b.toString();
                             String text = b ? in.onTrue() : in.onFalse();
@@ -360,7 +379,7 @@ public final class Engine implements DialogEngineAPI {
                         }
                     }
                     case SLIDER -> {
-                        Float f = view.getFloat(key);
+                        Float f = view.number(key);
                         if (f != null && !f.isNaN()) v = Text.number(Math.max(in.min(), Math.min(in.max(), f)));
                     }
                 }
@@ -495,7 +514,7 @@ public final class Engine implements DialogEngineAPI {
     @Override
     public void close(Player player) {
         sessions.remove(player.getUniqueId());
-        player.closeDialog();
+        Platform.closeDialog(player);
     }
 
     @Override
@@ -595,9 +614,9 @@ public final class Engine implements DialogEngineAPI {
     }
 
     @Override
-    public Component text(Player viewer, String miniMessage, Map<String, String> values) {
-        Scope scope = new Scope(this, viewer, "", new LinkedHashMap<>(values), Set.of(), null, null);
-        return Text.component(miniMessage, scope);
+    public String textJson(Player viewer, String miniMessage, Map<String, String> values) {
+        Scope scope = new Scope(this, viewer, "", new LinkedHashMap<>(values == null ? Map.of() : values), Set.of(), null, null);
+        return Text.json(miniMessage, scope).toString();
     }
 
     @Override

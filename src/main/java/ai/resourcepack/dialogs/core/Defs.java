@@ -1,6 +1,5 @@
 package ai.resourcepack.dialogs.core;
 
-import io.papermc.paper.registry.data.dialog.DialogBase.DialogAfterAction;
 
 import java.util.List;
 import java.util.Map;
@@ -11,6 +10,15 @@ final class Defs {
     private Defs() {}
 
     enum Type { AUTO, NOTICE, CONFIRMATION, MULTI_ACTION, LINKS }
+
+    /** What the screen does once a button is pressed: the game's {@code after_action}. */
+    enum After {
+        CLOSE, NONE, WAIT_FOR_RESPONSE;
+
+        String json() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
 
     record ForEach(String list, String alias, int perPage, int limit) {}
 
@@ -24,7 +32,7 @@ final class Defs {
             int columns,
             boolean escape,
             boolean pause,
-            DialogAfterAction after,
+            Defs.After after,
             List<BodyDef> body,
             List<InputDef> inputs,
             List<ButtonDef> buttons,

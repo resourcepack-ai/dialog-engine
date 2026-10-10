@@ -35,7 +35,7 @@ final class OpenCommands {
 
     void sync(Collection<DialogDef> defs) {
         clear();
-        CommandMap map = Bukkit.getCommandMap();
+        CommandMap map = Platform.commandMap();
         Set<String> taken = new HashSet<>();
         for (DialogDef def : defs) {
             if (def.command() == null) continue;
@@ -63,7 +63,7 @@ final class OpenCommands {
 
     void clear() {
         if (registered.isEmpty()) return;
-        CommandMap map = Bukkit.getCommandMap();
+        CommandMap map = Platform.commandMap();
         for (DialogCommand cmd : registered.values()) unregister(map, cmd);
         registered.clear();
         refreshClients();
@@ -76,7 +76,7 @@ final class OpenCommands {
      */
     static void unregister(CommandMap map, Command cmd) {
         cmd.unregister(map);
-        map.getKnownCommands().values().removeIf(c -> c == cmd);
+        Platform.knownCommands(map).values().removeIf(c -> c == cmd);
     }
 
     private void refreshClients() {

@@ -10,8 +10,8 @@ menus on.
 - **Developers** ship dialogs with their plugin, add their own actions,
   placeholders and lists, and hear every click as an event.
 
-Needs **Paper 1.21.7 or newer** (dialogs are 1.21.6; Paper's API for them,
-which this is built on, is 1.21.7) and players on a 1.21.6+ client.
+Runs on **Spigot or Paper 1.21.7 or newer**, one jar for both, with players
+on a 1.21.6+ client.
 [PlaceholderAPI](https://www.spigotmc.org/resources/6245/) is optional.
 
 ## Commands

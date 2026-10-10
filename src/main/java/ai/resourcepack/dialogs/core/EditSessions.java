@@ -74,7 +74,7 @@ final class EditSessions {
     }
 
     private void say(CommandSender to, String mini) {
-        to.sendMessage(Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
+        Platform.send(to, Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
     }
 
     // ------------------------------------------------------------------ opening
@@ -106,10 +106,10 @@ final class EditSessions {
             return;
         }
         EditWire.Open request = new EditWire.Open();
-        request.client = "DialogEngine/" + plugin.getPluginMeta().getVersion();
+        request.client = "DialogEngine/" + plugin.getDescription().getVersion();
         request.kind = "dialog";
         request.label = dialogId;
-        request.minecraftVersion = Bukkit.getMinecraftVersion();
+        request.minecraftVersion = Platform.minecraftVersion();
         request.dialog = new EditWire.Dialog();
         request.dialog.path = path;
         request.dialog.key = name;
@@ -124,7 +124,7 @@ final class EditSessions {
                 EditWire.Opened opened = GSON.fromJson(request("POST", "/api/rpengine/session", body, null), EditWire.Opened.class);
                 sessions.put(opened.id, new Live(opened.id, opened.pullToken, parse(opened.expiresAt), dir, name, dialogId, opener, opened.revision));
                 ensurePolling();
-                Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(Text.MM.deserialize(
+                Bukkit.getScheduler().runTask(plugin, () -> Platform.send(sender, Text.MM.deserialize(
                         "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>Edit <white>" + dialogId + "</white>: "
                                 + "<click:open_url:'" + opened.url + "'><hover:show_text:'Open the dialog editor'><#3670f8><u>open the editor</u></#3670f8></hover></click>"
                                 + "<dark_gray>. The link works once and lasts three hours; press Send to server to bring it back here.</dark_gray>")));
@@ -189,7 +189,7 @@ final class EditSessions {
         List<String> problems = engine.drawn.problems.stream().filter(p -> p.contains(live.dialogId.replace(':', '/'))).toList();
         say(tell, "Saved <white>" + live.dialogId + "</white> from the editor"
                 + (problems.isEmpty() ? ". <click:run_command:'/de open " + live.dialogId + "'><#3670f8><u>Open it</u></#3670f8></click>" : ", with problems:"));
-        for (String p : problems) tell.sendMessage(Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
+        for (String p : problems) Platform.send(tell, Text.MM.deserialize("<yellow> - </yellow><gray>" + Text.MM.escapeTags(p)));
     }
 
     // ------------------------------------------------------------------ redrawing
@@ -215,10 +215,10 @@ final class EditSessions {
         String name = dialogId.substring(dialogId.indexOf(':') + 1);
         String path = plugin.getDataFolder().toPath().relativize(dir.toPath()).toString().replace('\\', '/');
         EditWire.Open request = new EditWire.Open();
-        request.client = "DialogEngine/" + plugin.getPluginMeta().getVersion();
+        request.client = "DialogEngine/" + plugin.getDescription().getVersion();
         request.kind = "dialog";
         request.label = dialogId;
-        request.minecraftVersion = Bukkit.getMinecraftVersion();
+        request.minecraftVersion = Platform.minecraftVersion();
         request.dialog = new EditWire.Dialog();
         request.dialog.path = path;
         request.dialog.key = name;
@@ -255,7 +255,7 @@ final class EditSessions {
         c.setRequestMethod(method);
         c.setConnectTimeout(10_000);
         c.setReadTimeout(30_000);
-        c.setRequestProperty("User-Agent", "DialogEngine/" + plugin.getPluginMeta().getVersion());
+        c.setRequestProperty("User-Agent", "DialogEngine/" + plugin.getDescription().getVersion());
         c.setRequestProperty("Accept", "application/json");
         if (token != null) c.setRequestProperty("Authorization", "Bearer " + token);
         if (body != null) {
