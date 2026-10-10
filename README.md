@@ -35,6 +35,13 @@ a settings page, plus a menu of them all. Open the menu with
 `/dialog-samples`. Only ops (`dialogengine.samples`) can open them. Set
 `samples: false` in config.yml and they are never written.
 
+Two more are **drawn** dialogs, shown with a resource pack, in
+`plugins/DialogEngine/drawn/samples/`: a punishment panel
+(`/sample-punish <player>`) and a six-page Social settings menu
+(`/sample-social`). `/de edit samples:punish` opens one in the editor. Their
+pack is sent when a player opens one, never on join, so the samples alone never
+ask anybody to download anything.
+
 ## Writing a dialog
 
 In the browser: `/de edit <namespace:id>` opens it in Studio's dialog editor

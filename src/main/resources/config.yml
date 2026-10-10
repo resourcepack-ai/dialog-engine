@@ -57,6 +57,11 @@ messages:
   too-short: "{label} needs at least {min} characters."
   invalid: "{label} isn't valid."
   link: "<gray>Open: <aqua><u>{url}</u></aqua>"
+  # A drawn dialog opened before the player has its pack (the samples' pack is
+  # only sent then), and what happens if they decline it or it fails.
+  pack-loading: "<gray>Loading this menu's resource pack..."
+  pack-declined: "<red>This menu is drawn with a resource pack, and you declined it."
+  pack-failed: "<red>This menu's resource pack could not be loaded."
 
 # /de edit <id> opens a dialog in the dialog editor at resourcepack.ai, in the
 # browser, with no account. Pressing "Send to server" there writes it back into
@@ -66,7 +71,8 @@ edit:
   url: "https://studio.resourcepack.ai"
 
 # Drawn dialogs (made with /de edit) are drawn by a small resource pack. It is
-# only built and sent once there is one; plain YAML dialogs never need it.
+# only built and sent once there is one; plain YAML dialogs never need it. The
+# drawn samples alone do not send it on join: it is sent when one is opened.
 pack:
   # Send it to players as they join, beside any pack the server already sends.
   send: true

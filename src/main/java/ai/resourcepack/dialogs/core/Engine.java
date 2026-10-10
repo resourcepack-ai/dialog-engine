@@ -165,9 +165,46 @@ public final class Engine implements DialogEngineAPI {
         drawn.click(player, args);
     }
 
-    /** Sends the drawn dialog pack, when there is one. */
+    /** Sends the drawn dialog pack to a player joining, when there is one they should have. */
     public void sendDrawnPack(Player player) {
-        drawnPack.send(player);
+        if (drawnPack.onJoin()) drawnPack.send(player);
+    }
+
+    /** Drawn dialogs waiting for their pack to reach a player. */
+    private final Map<UUID, Runnable> waitingForPack = new ConcurrentHashMap<>();
+
+    /**
+     * What a player's client made of the drawn dialog pack. A dialog opened
+     * before they had it opens once it has loaded; one they declined or could
+     * not download says so, and the next one opened offers the pack again.
+     */
+    public void packStatus(Player player, UUID pack, String status) {
+        if (!DrawnPack.isPack(pack)) return;
+        switch (status) {
+            case "SUCCESSFULLY_LOADED" -> {
+                Runnable open = waitingForPack.remove(player.getUniqueId());
+                if (open != null) open.run();
+            }
+            case "ACCEPTED", "DOWNLOADED" -> {
+                // Still on its way.
+            }
+            case "DECLINED" -> {
+                drawnPack.refused(player);
+                if (waitingForPack.remove(player.getUniqueId()) != null) {
+                    tell(player, message("pack-declined", "<red>This menu is drawn with a resource pack, and you declined it."));
+                }
+            }
+            default -> {
+                drawnPack.refused(player);
+                if (waitingForPack.remove(player.getUniqueId()) != null) {
+                    tell(player, message("pack-failed", "<red>This menu's resource pack could not be loaded."));
+                    if (player.hasPermission("dialogengine.admin")) {
+                        tell(player, "<gray>Players download it from <white>" + Text.MM.escapeTags(drawnPack.url())
+                                + "</white>. If that is not this server's address, set <white>pack.public-host</white> in Dialog Engine's config.yml.");
+                    }
+                }
+            }
+        }
     }
 
     private Map<String, DialogDef> loadTopLevel(Loader loader, File folder) {
@@ -268,6 +305,8 @@ public final class Engine implements DialogEngineAPI {
 
     public void forget(Player player) {
         drawn.forget(player);
+        drawnPack.forget(player);
+        waitingForPack.remove(player.getUniqueId());
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
         clickRate.remove(player.getUniqueId());
@@ -313,6 +352,18 @@ public final class Engine implements DialogEngineAPI {
         if (!player.getUniqueId().equals(session.viewer)) return false;
         if (drawn.has(session.dialogId)) {
             if (!player.isOnline()) return false;
+            if (drawnPack.needs(player)) {
+                // Drawn before the pack reaches them, it would be a box of missing glyphs: send it, and open this once it has loaded.
+                // Not sent (the console says why): shown anyway, since its buttons still work.
+                waitingForPack.put(player.getUniqueId(), () -> {
+                    if (player.isOnline()) show(player, session, reopened);
+                });
+                if (drawnPack.send(player)) {
+                    tell(player, message("pack-loading", "<gray>Loading this menu's resource pack..."));
+                    return true;
+                }
+                waitingForPack.remove(player.getUniqueId());
+            }
             DialogOpenEvent event = new DialogOpenEvent(player, session.dialogId, session.values, reopened);
             Bukkit.getPluginManager().callEvent(event);
             if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;

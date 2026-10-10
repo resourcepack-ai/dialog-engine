@@ -46,6 +46,9 @@ import java.util.zip.ZipOutputStream;
  */
 final class DrawnPack {
 
+    /** The namespace the sample drawn dialogs are written into. */
+    static final String SAMPLES = "samples";
+
     private static final UUID PACK_ID = UUID.nameUUIDFromBytes("dialogengine:drawn".getBytes(StandardCharsets.UTF_8));
 
     private final Engine engine;
@@ -54,6 +57,10 @@ final class DrawnPack {
     private Served server;
     private int servedPort = -1;
     private String servedBind;
+    /** Whether a drawn dialog other than the samples is here, which is what sends the pack on join. */
+    private boolean ownDialogs;
+    /** Players sent the pack since they joined, whatever they made of it so far. */
+    private final java.util.Set<UUID> offered = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     DrawnPack(Engine engine) {
         this.engine = engine;
@@ -71,6 +78,8 @@ final class DrawnPack {
         int format = 0;
         int min = Integer.MAX_VALUE;
         int max = 0;
+        boolean own = false;
+        Map<String, Map<Integer, Integer>> moves = DrawnGlyphs.moves(drawnRoot);
         File[] namespaces = drawnRoot.listFiles(File::isDirectory);
         if (namespaces != null) {
             for (File ns : namespaces) {
@@ -79,6 +88,7 @@ final class DrawnPack {
                 for (File dir : dirs) {
                     Path pack = dir.toPath().resolve("pack");
                     if (!Files.isDirectory(pack)) continue;
+                    if (!ns.getName().equalsIgnoreCase(SAMPLES)) own = true;
                     try (var walk = Files.walk(pack)) {
                         for (Path p : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
                             String name = pack.relativize(p).toString().replace('\\', '/');
@@ -101,7 +111,12 @@ final class DrawnPack {
                                 continue;
                             }
                             if (name.equals("pack.png")) continue;
-                            files.put(name, bytes);
+                            Map<Integer, Integer> move = moves.get(ns.getName() + "/" + dir.getName());
+                            if (move != null && name.equals(DrawnGlyphs.DEFAULT_FONT)) {
+                                JsonObject font = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+                                bytes = DrawnGlyphs.moveFont(font, move).toString().getBytes(StandardCharsets.UTF_8);
+                            }
+                            files.merge(name, bytes, (had, mine) -> combine(name, had, mine));
                         }
                     } catch (IOException | RuntimeException e) {
                         engine.plugin().getLogger().warning("Drawn dialog pack " + ns.getName() + "/" + dir.getName() + " could not be read: " + e.getMessage());
@@ -109,6 +124,7 @@ final class DrawnPack {
                 }
             }
         }
+        ownDialogs = own;
         if (files.isEmpty()) {
             zip = null;
             sha1 = null;
@@ -151,7 +167,35 @@ final class DrawnPack {
             sha1 = null;
             engine.plugin().getLogger().warning("Could not build the drawn dialog pack: " + e.getMessage());
         }
-        serve();
+        // The samples alone are not a reason to open a port: that waits for the first one opened.
+        if (ownDialogs || server != null) serve();
+    }
+
+    /**
+     * Two dialogs' copies of one file. Fonts and language files are made of
+     * entries, and each dialog's are wanted: a font's providers are put
+     * together (the first to define a character keeps it, as in the game), a
+     * language file's keys likewise. Anything else is the same file in every
+     * drawing (a shader, the button sprites), and the last read is kept.
+     */
+    private static byte[] combine(String name, byte[] had, byte[] mine) {
+        if (java.util.Arrays.equals(had, mine) || !name.endsWith(".json")) return mine;
+        try {
+            JsonObject a = JsonParser.parseString(new String(had, StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject b = JsonParser.parseString(new String(mine, StandardCharsets.UTF_8)).getAsJsonObject();
+            if (name.matches("assets/[^/]+/font/[^/]+\\.json") &&a.has("providers") && b.has("providers")) {
+                JsonArray providers = a.getAsJsonArray("providers");
+                for (JsonElement p : b.getAsJsonArray("providers")) if (!providers.contains(p)) providers.add(p);
+                return a.toString().getBytes(StandardCharsets.UTF_8);
+            }
+            if (name.matches("assets/[^/]+/lang/[^/]+\\.json")) {
+                for (var e : b.entrySet()) if (!a.has(e.getKey())) a.add(e.getKey(), e.getValue());
+                return a.toString().getBytes(StandardCharsets.UTF_8);
+            }
+        } catch (RuntimeException e) {
+            // Not JSON after all: kept as the last one read, as before.
+        }
+        return mine;
     }
 
     private static int major(JsonElement e) {
@@ -319,20 +363,59 @@ final class DrawnPack {
         return "http://" + host + ":" + cfg().getInt("port", 8165) + "/drawn-" + sha1 + ".zip";
     }
 
-    /** Sends it to a player, beside any pack the server already sends. */
-    void send(Player player) {
-        if (zip == null || !cfg().getBoolean("send", true)) return;
+    /**
+     * Whether a player joining is sent it. Not when the only drawn dialogs are
+     * the samples: a server that has never made one of its own does not ask
+     * every player to download a pack, and a sample's pack is sent when one is
+     * opened ({@link #needs}).
+     */
+    boolean onJoin() {
+        return ownDialogs;
+    }
+
+    /** Whether showing a player a drawn dialog has to wait for the pack to reach them first. */
+    boolean needs(Player player) {
+        return zip != null && cfg().getBoolean("send", true) && !offered.contains(player.getUniqueId());
+    }
+
+    /** The player declined it or could not load it: the next drawn dialog they open offers it again. */
+    void refused(Player player) {
+        offered.remove(player.getUniqueId());
+    }
+
+    void forget(Player player) {
+        offered.remove(player.getUniqueId());
+    }
+
+    static boolean isPack(UUID id) {
+        return PACK_ID.equals(id);
+    }
+
+    /**
+     * Sends it to a player, beside any pack the server already sends. False
+     * when it was not sent: there is none, sending is off, or this server was
+     * to serve it and could not (the console has said why).
+     */
+    boolean send(Player player) {
+        if (zip == null || !cfg().getBoolean("send", true)) return false;
+        serve();
+        if (hosting() && server == null) return false;
+        offered.add(player.getUniqueId());
         try {
             // Added beside the server's own pack, never replacing it.
             String prompt = Platform.legacy(Text.MM.deserialize(cfg().getString("prompt", "<gray>This server's menus are drawn with a small resource pack.")));
             player.addResourcePack(PACK_ID, url(), HexFormat.of().parseHex(sha1), prompt, cfg().getBoolean("required", false));
         } catch (RuntimeException e) {
             engine.plugin().getLogger().warning("Could not send the drawn dialog pack to " + player.getName() + ": " + e.getMessage());
+            offered.remove(player.getUniqueId());
+            return false;
         }
+        return true;
     }
 
+    /** After a rebuild: everybody, or (samples only) whoever has it already. */
     void sendAll() {
-        for (Player p : Bukkit.getOnlinePlayers()) send(p);
+        for (Player p : Bukkit.getOnlinePlayers()) if (ownDialogs || offered.contains(p.getUniqueId())) send(p);
     }
 
     synchronized void stop() {

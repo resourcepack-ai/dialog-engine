@@ -11,6 +11,7 @@ index:
   columns: 2
   body:
     - "<gray>Each one is a file in <white>dialogs/samples/</white>. Open it, read it, change it, <white>/de reload</white>."
+    - "<gray>The two drawn menus are in <white>drawn/samples/</white>: <white>/de edit samples:punish</white> opens one in Studio's editor."
   buttons:
     - label: "Welcome"
       tooltip: "A notice with the player's head"
@@ -39,5 +40,12 @@ index:
     - label: "Settings"
       tooltip: "Every kind of input"
       open: settings
+    - label: "Punish menu"
+      tooltip: "Drawn in Studio, shown with a resource pack: a staff panel"
+      actions:
+        - "[open] punish target={player}"
+    - label: "Social menu"
+      tooltip: "Drawn in Studio, shown with a resource pack: six pages of settings"
+      open: social
   exit:
     label: "Close"

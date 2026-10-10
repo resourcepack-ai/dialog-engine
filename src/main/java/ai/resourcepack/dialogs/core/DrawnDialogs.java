@@ -90,13 +90,13 @@ final class DrawnDialogs {
      * it since stops the clicks; {@code live} is false once the dialog has gone
      * from their screen, when it is kept only to reopen on the same page.
      */
-    private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live) {
+    private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live, String json) {
         Shown used() {
-            return new Shown(drawn, page, session, null, permitted, at, live);
+            return new Shown(drawn, page, session, null, permitted, at, live, json);
         }
 
         Shown retired() {
-            return new Shown(drawn, page, session, null, permitted, at, false);
+            return new Shown(drawn, page, session, null, permitted, at, false, json);
         }
     }
 
@@ -132,6 +132,7 @@ final class DrawnDialogs {
         dialogs.clear();
         problems.clear();
         stale.clear();
+        Map<String, Map<Integer, Integer>> moves = DrawnGlyphs.moves(folder());
         File[] namespaces = folder().listFiles(File::isDirectory);
         if (namespaces != null) {
             for (File ns : namespaces) {
@@ -142,7 +143,7 @@ final class DrawnDialogs {
                     try {
                         DrawnFiles.read(dir.toPath());
                         if (DrawnFiles.stale(dir.toPath())) stale.put(id, dir);
-                        Drawn d = read(id, dir);
+                        Drawn d = read(id, dir, moves.get(ns.getName() + "/" + dir.getName()));
                         if (d != null) dialogs.put(id, d);
                     } catch (Exception e) {
                         problems.add("drawn/" + ns.getName() + "/" + dir.getName() + ": " + e.getMessage());
@@ -153,7 +154,8 @@ final class DrawnDialogs {
         registerCommands();
     }
 
-    private Drawn read(String id, File dir) throws Exception {
+    /** {@code move}: the characters this dialog's picture was moved to ({@link DrawnGlyphs}), or null. */
+    private Drawn read(String id, File dir, Map<Integer, Integer> move) throws Exception {
         File built = new File(dir, "dialogs.json");
         if (!built.isFile()) return null;
         JsonArray list = JsonParser.parseString(Files.readString(built.toPath(), StandardCharsets.UTF_8)).getAsJsonArray();
@@ -176,7 +178,9 @@ final class DrawnDialogs {
                     && "none".equals(a.getAsString())) {
                 staysUp.add(studioId);
             }
-            pages.put(studioId, GSON.toJson(rewrite(json, actions, allowed, refused)));
+            JsonElement rewritten = rewrite(json, actions, allowed, refused);
+            if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
+            pages.put(studioId, GSON.toJson(rewritten));
             if (page.has("vars")) {
                 for (JsonElement v : page.getAsJsonArray("vars")) {
                     Set<String> values = vars.computeIfAbsent(v.getAsJsonObject().get("name").getAsString(), k -> new LinkedHashSet<>());
@@ -295,7 +299,7 @@ final class DrawnDialogs {
         json = filled(player, d, json, session.values);
         json = DialogBars.fill(json);
         boolean permitted = d.permission == null || player.hasPermission(d.permission);
-        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true));
+        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json));
         if (Platform.showJson(player, json, engine.plugin().getLogger())) return true;
         engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ".");
         return false;
@@ -342,13 +346,17 @@ final class DrawnDialogs {
         boolean act = args[0].equalsIgnoreCase("act");
         // An action click is held as written, without the nonce it was sent with.
         String command = CLICK + " " + String.join(" ", act && args.length == 3 ? Arrays.copyOf(args, 2) : args);
+        // A click is checked against the page as stored and as the player saw it:
+        // a switch, slider or dropdown's command names its next value through a
+        // placeholder, so only the filled drawing holds it.
         String json = d == null ? null : d.pages.get(shown.page);
+        String seen = d == null ? null : shown.json;
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
-            if (picture(json, command)) clickSound(player);
+            if (picture(json, command) || picture(seen, command)) clickSound(player);
             engine.closeDialog(player);
             return;
         }
-        if (d == null || !holds(json, command)) return;
+        if (d == null || !(holds(json, command) || holds(seen, command))) return;
         if (System.currentTimeMillis() - shown.at > engine.clickLifetime().toMillis()) {
             retire(player);
             return;
@@ -365,7 +373,7 @@ final class DrawnDialogs {
                 return;
             }
         }
-        if (picture(json, command)) clickSound(player);
+        if (picture(json, command) || picture(seen, command)) clickSound(player);
         if (args[0].equalsIgnoreCase("page") && args.length == 2) {
             String page = args[1].toLowerCase(Locale.ROOT);
             Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
@@ -464,9 +472,10 @@ final class DrawnDialogs {
                         Platform.send(p, Text.MM.deserialize("<red>You cannot open that."));
                         return true;
                     }
+                    // {target} is who the command names, or (named nobody) the player themselves.
                     Map<String, String> values = new LinkedHashMap<>();
-                    if (args.length > 0) values.put("target", args[0]);
-                    open(p, d.id, values, values.keySet());
+                    values.put("target", args.length > 0 ? args[0] : p.getName());
+                    open(p, d.id, values, args.length > 0 ? values.keySet() : Set.of());
                     return true;
                 }
             };

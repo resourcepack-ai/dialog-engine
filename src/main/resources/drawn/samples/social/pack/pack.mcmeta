@@ -1,0 +1,66 @@
+{
+  "pack": {
+    "pack_format": 75,
+    "min_format": 75,
+    "max_format": 75,
+    "description": "AI Generated Resource Pack (Minecraft 1.21.11)"
+  },
+  "overlays": {
+    "entries": [
+      {
+        "formats": {
+          "min_inclusive": 63,
+          "max_inclusive": 64
+        },
+        "min_format": 63,
+        "max_format": 64,
+        "directory": "rpai_dialog_v63"
+      },
+      {
+        "formats": {
+          "min_inclusive": 69,
+          "max_inclusive": 69
+        },
+        "min_format": 69,
+        "max_format": 69,
+        "directory": "rpai_dialog_v69"
+      },
+      {
+        "formats": {
+          "min_inclusive": 75,
+          "max_inclusive": 88
+        },
+        "min_format": 75,
+        "max_format": 88,
+        "directory": "rpai_dialog_v75"
+      },
+      {
+        "formats": {
+          "min_inclusive": 69,
+          "max_inclusive": 75
+        },
+        "min_format": 69,
+        "max_format": 75,
+        "directory": "rpai_head_v69"
+      },
+      {
+        "formats": {
+          "min_inclusive": 84,
+          "max_inclusive": 84
+        },
+        "min_format": 84,
+        "max_format": 84,
+        "directory": "rpai_head_v84"
+      },
+      {
+        "formats": {
+          "min_inclusive": 88,
+          "max_inclusive": 88
+        },
+        "min_format": 88,
+        "max_format": 88,
+        "directory": "rpai_head_v88"
+      }
+    ]
+  }
+}

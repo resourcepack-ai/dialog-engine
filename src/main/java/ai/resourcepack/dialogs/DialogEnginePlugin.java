@@ -21,7 +21,7 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
     /** The sample dialogs, written into dialogs/samples/ unless config.yml says samples: false. */
     private static final List<String> SAMPLES = List.of("index.yml", "welcome.yml", "rules.yml", "shop.yml",
-            "kits.yml", "warps.yml", "players.yml", "profile.yml", "report.yml", "settings.yml");
+            "kits.yml", "warps.yml", "players.yml", "profile.yml", "report.yml", "settings.yml", "drawn.yml");
 
     private Engine engine;
 
@@ -52,6 +52,14 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         File samples = new File(getDataFolder(), "dialogs/samples");
         if (getConfig().getBoolean("samples", true) && !samples.exists()) {
             for (String name : SAMPLES) saveResource("dialogs/samples/" + name, false);
+        }
+        // The drawn samples (a punishment panel, a settings menu), the same way:
+        // Studio's drawings, shipped drawn, so they work without the internet.
+        File drawnSamples = new File(getDataFolder(), "drawn/samples");
+        if (getConfig().getBoolean("samples", true) && !drawnSamples.exists()) {
+            writeDrawnSamples();
+            // Its picker, for a server that had the YAML samples before there were drawn ones.
+            if (!new File(getDataFolder(), "dialogs/samples/drawn.yml").exists()) saveResource("dialogs/samples/drawn.yml", false);
         }
 
         engine.load();
@@ -93,6 +101,20 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
                 .start();
     }
 
+    /** Every file listed in the jar's {@code drawn/samples/files.txt}. */
+    private void writeDrawnSamples() {
+        try (java.io.InputStream list = getResource("drawn/samples/files.txt")) {
+            if (list == null) return;
+            for (String line : new String(list.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
+                String name = line.trim();
+                if (name.isEmpty() || name.contains("..")) continue;
+                saveResource("drawn/samples/" + name, false);
+            }
+        } catch (java.io.IOException | IllegalArgumentException e) {
+            getLogger().warning("Could not write the drawn sample dialogs: " + e.getMessage());
+        }
+    }
+
     @Override
     public void onDisable() {
         if (updates != null) updates.stop();
@@ -104,6 +126,11 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onJoin(org.bukkit.event.player.PlayerJoinEvent event) {
         engine.sendDrawnPack(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onPackStatus(org.bukkit.event.player.PlayerResourcePackStatusEvent event) {
+        engine.packStatus(event.getPlayer(), event.getID(), event.getStatus().name());
     }
 
     @EventHandler

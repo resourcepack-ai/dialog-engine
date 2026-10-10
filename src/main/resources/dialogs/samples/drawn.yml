@@ -1,0 +1,24 @@
+# samples:punish_pick - who the drawn punishment panel (samples:punish) is
+# about. The panel itself is in drawn/samples/punish/: a drawn dialog, made in
+# Studio's dialog editor and shown with a resource pack. Its Pick player
+# button opens this, and each name opens the panel again about them.
+punish_pick:
+  permission: dialogengine.samples
+  title: "Who is this about?"
+  columns: 2
+  body:
+    - "<gray>Page {page} of {pages}"
+  buttons:
+    - for-each: online_players
+      per-page: 8
+      label: "{row.name}"
+      actions:
+        - "[open] samples:punish target={row.name}"
+    - label: "<gray>← Previous"
+      if: "{has_prev}"
+      actions: ["[page] prev"]
+    - label: "<gray>Next →"
+      if: "{has_next}"
+      actions: ["[page] next"]
+  exit:
+    label: "Cancel"

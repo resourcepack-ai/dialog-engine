@@ -1,0 +1,2282 @@
+# samples:social - a settings menu of six pages, drawn with a resource pack.
+# /sample-social opens it, or Social menu in /dialog-samples.
+#
+# Every control is a setting kept on the player (set_status, set_music...),
+# so it stays as it was left. Nothing reads them: a plugin of yours can,
+# and any action or text can print one, e.g. {set_status}.
+#
+# A drawn dialog: Studio's dialog editor document, as YAML.
+# Edit it with /de edit, or by hand here and run /de reload: a changed
+# file is redrawn by Studio (resourcepack.ai), which needs the internet.
+title: Social
+command: sample-social
+commandPermission: dialogengine.samples
+style: dialog
+document:
+  row:
+    - column:
+        - row:
+            - icon: head:{player}
+              size: 24
+            - column:
+                - space: 2
+                - text: "{player}"
+                  style: heading
+                  align: left
+                  scale: 1
+                  w: fit
+                - space: 2
+                - row:
+                    - icon: ui:dot-green
+                      size: 9
+                      bind: set_status
+                      states:
+                        online: ui:dot-green
+                        away: ui:dot-gold
+                        busy: ui:dot-red
+                    - column:
+                        - space: 1
+                        - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                          style: muted
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: start
+              w: fit
+              h: fit
+              gap: 0
+              pad: 0
+              align: start
+              cross: start
+          w: grow
+          h: fit
+          gap: 4
+          pad: 4
+          align: start
+          cross: center
+          surface: well
+        - space: 2
+        - nav: Profile
+          icon: ui:user
+          w: grow
+          onClick:
+            action: page
+            value: profile
+        - nav: Chat
+          icon: ui:chat
+          w: grow
+          onClick:
+            action: page
+            value: chat
+        - nav: Friends
+          icon: ui:users
+          w: grow
+          onClick:
+            action: page
+            value: friends
+        - nav: Audio
+          icon: ui:music
+          w: grow
+          onClick:
+            action: page
+            value: audio
+        - nav: Accessibility
+          icon: ui:eye
+          w: grow
+          onClick:
+            action: page
+            value: access
+        - nav: Controls
+          icon: ui:keyboard
+          w: grow
+          onClick:
+            action: page
+            value: controls
+      w: 104
+      h: fit
+      gap: 1
+      pad: 2
+      align: start
+      cross: start
+      surface: sheet
+      name: Sidebar
+    - column:
+        - column:
+            - row:
+                - space: 3
+                - text: Identity
+                  style: heading
+                  align: left
+                  scale: 1
+                  icon: ui:user
+                  w: grow
+                - space: 2
+              w: grow
+              h: 15
+              gap: 3
+              pad: 0
+              align: start
+              cross: center
+              surface: head
+              name: Heading
+            - column:
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:palette
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Name colour
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                        - text: Your name in chat
+                          style: muted
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - dropdown: Default
+                      options:
+                        - Default
+                        - Gold
+                        - Aqua
+                        - Pink
+                      bind: set_name_colour
+                      w: 64
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Name colour
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:crown
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Rank tag
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                        - text: Show your rank
+                          style: muted
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - switch: true
+                      bind: set_rank_tag
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Rank tag
+              w: grow
+              h: fit
+              gap: 9
+              pad: 5
+              align: start
+              cross: start
+              name: Body
+          w: grow
+          h: fit
+          gap: 0
+          pad: 1
+          align: start
+          cross: start
+          surface: sheet
+          name: Identity
+        - column:
+            - row:
+                - space: 3
+                - text: Status
+                  style: heading
+                  align: left
+                  scale: 1
+                  icon: ui:dot-green
+                  w: grow
+                - space: 2
+              w: grow
+              h: 15
+              gap: 3
+              pad: 0
+              align: start
+              cross: center
+              surface: head
+              name: Heading
+            - column:
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Status
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                        - text: What friends see
+                          style: muted
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - segmented:
+                        - Online
+                        - Away
+                        - Busy
+                      selected: 0
+                      bind: set_status
+                      compact: true
+                      look: raised
+                      w: fit
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Status
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:clock
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Last seen
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                        - text: When you were last on
+                          style: muted
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - switch: false
+                      bind: set_last_seen
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Last seen
+              w: grow
+              h: fit
+              gap: 9
+              pad: 5
+              align: start
+              cross: start
+              name: Body
+          w: grow
+          h: fit
+          gap: 0
+          pad: 1
+          align: start
+          cross: start
+          surface: sheet
+          name: Status
+        - row:
+            - space: grow
+            - button: Done
+              icon: ui:check
+              look: light
+              w: fit
+              onClick:
+                action: close
+                value: ""
+          w: grow
+          h: fit
+          gap: 4
+          pad: 0
+          align: start
+          cross: center
+      w: grow
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      perPage: true
+      name: Page
+  w: fit
+  h: fit
+  gap: 6
+  pad: 0
+  align: start
+  cross: start
+  theme:
+    face: "#c6c6c6"
+    accent: "#3670f8"
+pages:
+  - id: profile
+    name: Profile
+  - id: chat
+    name: Chat
+    document:
+      row:
+        - column:
+            - row:
+                - icon: head:{player}
+                  size: 24
+                - column:
+                    - space: 2
+                    - text: "{player}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - space: 2
+                    - row:
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                        - column:
+                            - space: 1
+                            - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                      w: fit
+                      h: fit
+                      gap: 3
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 0
+                  pad: 0
+                  align: start
+                  cross: start
+              w: grow
+              h: fit
+              gap: 4
+              pad: 4
+              align: start
+              cross: center
+              surface: well
+            - space: 2
+            - nav: Profile
+              icon: ui:user
+              w: grow
+              onClick:
+                action: page
+                value: profile
+            - nav: Chat
+              icon: ui:chat
+              w: grow
+              onClick:
+                action: page
+                value: chat
+            - nav: Friends
+              icon: ui:users
+              w: grow
+              onClick:
+                action: page
+                value: friends
+            - nav: Audio
+              icon: ui:music
+              w: grow
+              onClick:
+                action: page
+                value: audio
+            - nav: Accessibility
+              icon: ui:eye
+              w: grow
+              onClick:
+                action: page
+                value: access
+            - nav: Controls
+              icon: ui:keyboard
+              w: grow
+              onClick:
+                action: page
+                value: controls
+          w: 104
+          h: fit
+          gap: 1
+          pad: 2
+          align: start
+          cross: start
+          surface: sheet
+          name: Sidebar
+        - column:
+            - column:
+                - row:
+                    - space: 3
+                    - text: Messages
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:chat
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:users
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Show chat from
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Whose words you see
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - segmented:
+                            - All
+                            - Friends
+                            - None
+                          selected: 0
+                          bind: set_chat
+                          compact: true
+                          look: raised
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Show chat from
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:sparkle
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Emoji
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: "Turn :codes: into pictures"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: true
+                          bind: set_emoji
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Emoji
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Messages
+            - column:
+                - row:
+                    - space: 3
+                    - text: Filters
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:filter
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:shield
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Word filter
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Hide rude words
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - dropdown: Mild
+                          options:
+                            - Mild
+                            - Strict
+                            - Off
+                          bind: set_filter
+                          w: 64
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Word filter
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:clock
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Timestamps
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: When it was sent
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: false
+                          bind: set_timestamps
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Timestamps
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Filters
+            - row:
+                - space: grow
+                - button: Done
+                  icon: ui:check
+                  look: light
+                  w: fit
+                  onClick:
+                    action: close
+                    value: ""
+              w: grow
+              h: fit
+              gap: 4
+              pad: 0
+              align: start
+              cross: center
+          w: grow
+          h: fit
+          gap: 6
+          pad: 0
+          align: start
+          cross: start
+          perPage: true
+          name: Page
+      w: fit
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      theme:
+        face: "#c6c6c6"
+        accent: "#3670f8"
+  - id: friends
+    name: Friends
+    document:
+      row:
+        - column:
+            - row:
+                - icon: head:{player}
+                  size: 24
+                - column:
+                    - space: 2
+                    - text: "{player}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - space: 2
+                    - row:
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                        - column:
+                            - space: 1
+                            - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                      w: fit
+                      h: fit
+                      gap: 3
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 0
+                  pad: 0
+                  align: start
+                  cross: start
+              w: grow
+              h: fit
+              gap: 4
+              pad: 4
+              align: start
+              cross: center
+              surface: well
+            - space: 2
+            - nav: Profile
+              icon: ui:user
+              w: grow
+              onClick:
+                action: page
+                value: profile
+            - nav: Chat
+              icon: ui:chat
+              w: grow
+              onClick:
+                action: page
+                value: chat
+            - nav: Friends
+              icon: ui:users
+              w: grow
+              onClick:
+                action: page
+                value: friends
+            - nav: Audio
+              icon: ui:music
+              w: grow
+              onClick:
+                action: page
+                value: audio
+            - nav: Accessibility
+              icon: ui:eye
+              w: grow
+              onClick:
+                action: page
+                value: access
+            - nav: Controls
+              icon: ui:keyboard
+              w: grow
+              onClick:
+                action: page
+                value: controls
+          w: 104
+          h: fit
+          gap: 1
+          pad: 2
+          align: start
+          cross: start
+          surface: sheet
+          name: Sidebar
+        - column:
+            - column:
+                - row:
+                    - space: 3
+                    - text: Friends
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:users
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:person-add
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Requests
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Who can add you
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - segmented:
+                            - Anyone
+                            - Nobody
+                          selected: 0
+                          bind: set_requests
+                          compact: true
+                          look: raised
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Requests
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:bell
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Join alerts
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: When a friend joins
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: true
+                          bind: set_join_alerts
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Join alerts
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Friends
+            - column:
+                - row:
+                    - space: 3
+                    - text: Parties
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:party
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:mail
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Party invites
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Who can invite you
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - dropdown: Anyone
+                          options:
+                            - Anyone
+                            - Friends
+                            - Nobody
+                          bind: set_invites
+                          w: 64
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Party invites
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:check
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Auto-accept
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Join friends at once
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: false
+                          bind: set_auto_accept
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Auto-accept
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Parties
+            - row:
+                - space: grow
+                - button: Done
+                  icon: ui:check
+                  look: light
+                  w: fit
+                  onClick:
+                    action: close
+                    value: ""
+              w: grow
+              h: fit
+              gap: 4
+              pad: 0
+              align: start
+              cross: center
+          w: grow
+          h: fit
+          gap: 6
+          pad: 0
+          align: start
+          cross: start
+          perPage: true
+          name: Page
+      w: fit
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      theme:
+        face: "#c6c6c6"
+        accent: "#3670f8"
+  - id: audio
+    name: Audio
+    document:
+      row:
+        - column:
+            - row:
+                - icon: head:{player}
+                  size: 24
+                - column:
+                    - space: 2
+                    - text: "{player}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - space: 2
+                    - row:
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                        - column:
+                            - space: 1
+                            - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                      w: fit
+                      h: fit
+                      gap: 3
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 0
+                  pad: 0
+                  align: start
+                  cross: start
+              w: grow
+              h: fit
+              gap: 4
+              pad: 4
+              align: start
+              cross: center
+              surface: well
+            - space: 2
+            - nav: Profile
+              icon: ui:user
+              w: grow
+              onClick:
+                action: page
+                value: profile
+            - nav: Chat
+              icon: ui:chat
+              w: grow
+              onClick:
+                action: page
+                value: chat
+            - nav: Friends
+              icon: ui:users
+              w: grow
+              onClick:
+                action: page
+                value: friends
+            - nav: Audio
+              icon: ui:music
+              w: grow
+              onClick:
+                action: page
+                value: audio
+            - nav: Accessibility
+              icon: ui:eye
+              w: grow
+              onClick:
+                action: page
+                value: access
+            - nav: Controls
+              icon: ui:keyboard
+              w: grow
+              onClick:
+                action: page
+                value: controls
+          w: 104
+          h: fit
+          gap: 1
+          pad: 2
+          align: start
+          cross: start
+          surface: sheet
+          name: Sidebar
+        - column:
+            - column:
+                - row:
+                    - space: 3
+                    - text: Volume
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:sound
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:music
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Music
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Lobby music
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - slider: 40
+                          min: 0
+                          max: 100
+                          step: 10
+                          unit: "%"
+                          bind: set_music
+                          w: 100
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Music
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:bell
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Mention sound
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: When you're named
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - dropdown: Bell
+                          icon: ui:bell
+                          options:
+                            - Bell
+                            - Pling
+                            - Chime
+                            - None
+                          bind: set_mention
+                          w: 64
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Mention sound
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Volume
+            - column:
+                - row:
+                    - space: 3
+                    - text: Effects
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:star
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:paw
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Footsteps
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Other players' steps
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - segmented:
+                            - All
+                            - Near
+                            - None
+                          selected: 0
+                          bind: set_footsteps
+                          compact: true
+                          look: raised
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Footsteps
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:trophy
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Victory jingle
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: A tune when you win
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: true
+                          bind: set_jingle
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Victory jingle
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Effects
+            - row:
+                - space: grow
+                - button: Done
+                  icon: ui:check
+                  look: light
+                  w: fit
+                  onClick:
+                    action: close
+                    value: ""
+              w: grow
+              h: fit
+              gap: 4
+              pad: 0
+              align: start
+              cross: center
+          w: grow
+          h: fit
+          gap: 6
+          pad: 0
+          align: start
+          cross: start
+          perPage: true
+          name: Page
+      w: fit
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      theme:
+        face: "#c6c6c6"
+        accent: "#3670f8"
+  - id: access
+    name: Accessibility
+    document:
+      row:
+        - column:
+            - row:
+                - icon: head:{player}
+                  size: 24
+                - column:
+                    - space: 2
+                    - text: "{player}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - space: 2
+                    - row:
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                        - column:
+                            - space: 1
+                            - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                      w: fit
+                      h: fit
+                      gap: 3
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 0
+                  pad: 0
+                  align: start
+                  cross: start
+              w: grow
+              h: fit
+              gap: 4
+              pad: 4
+              align: start
+              cross: center
+              surface: well
+            - space: 2
+            - nav: Profile
+              icon: ui:user
+              w: grow
+              onClick:
+                action: page
+                value: profile
+            - nav: Chat
+              icon: ui:chat
+              w: grow
+              onClick:
+                action: page
+                value: chat
+            - nav: Friends
+              icon: ui:users
+              w: grow
+              onClick:
+                action: page
+                value: friends
+            - nav: Audio
+              icon: ui:music
+              w: grow
+              onClick:
+                action: page
+                value: audio
+            - nav: Accessibility
+              icon: ui:eye
+              w: grow
+              onClick:
+                action: page
+                value: access
+            - nav: Controls
+              icon: ui:keyboard
+              w: grow
+              onClick:
+                action: page
+                value: controls
+          w: 104
+          h: fit
+          gap: 1
+          pad: 2
+          align: start
+          cross: start
+          surface: sheet
+          name: Sidebar
+        - column:
+            - column:
+                - row:
+                    - space: 3
+                    - text: Reading
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:book
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:info
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Text size
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Server messages
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - segmented:
+                            - Small
+                            - Normal
+                            - Large
+                          selected: 1
+                          bind: set_text_size
+                          look: cycle
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Text size
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:eye
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: High contrast
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Stronger menu colours
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: false
+                          bind: set_contrast
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: High contrast
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Reading
+            - column:
+                - row:
+                    - space: 3
+                    - text: Comfort
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:heart
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:bolt
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Reduce flashing
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Calmer effects
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: false
+                          bind: set_flashing
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Reduce flashing
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:chat
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Subtitles
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Captions for sounds
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: false
+                          bind: set_subtitles
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Subtitles
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Comfort
+            - row:
+                - space: grow
+                - button: Done
+                  icon: ui:check
+                  look: light
+                  w: fit
+                  onClick:
+                    action: close
+                    value: ""
+              w: grow
+              h: fit
+              gap: 4
+              pad: 0
+              align: start
+              cross: center
+          w: grow
+          h: fit
+          gap: 6
+          pad: 0
+          align: start
+          cross: start
+          perPage: true
+          name: Page
+      w: fit
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      theme:
+        face: "#c6c6c6"
+        accent: "#3670f8"
+  - id: controls
+    name: Controls
+    document:
+      row:
+        - column:
+            - row:
+                - icon: head:{player}
+                  size: 24
+                - column:
+                    - space: 2
+                    - text: "{player}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - space: 2
+                    - row:
+                        - icon: ui:dot-green
+                          size: 9
+                          bind: set_status
+                          states:
+                            online: ui:dot-green
+                            away: ui:dot-gold
+                            busy: ui:dot-red
+                        - column:
+                            - space: 1
+                            - text: "{set_status?away:Away|busy:Busy|online:Online|Online}"
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                      w: fit
+                      h: fit
+                      gap: 3
+                      pad: 0
+                      align: start
+                      cross: start
+                  w: fit
+                  h: fit
+                  gap: 0
+                  pad: 0
+                  align: start
+                  cross: start
+              w: grow
+              h: fit
+              gap: 4
+              pad: 4
+              align: start
+              cross: center
+              surface: well
+            - space: 2
+            - nav: Profile
+              icon: ui:user
+              w: grow
+              onClick:
+                action: page
+                value: profile
+            - nav: Chat
+              icon: ui:chat
+              w: grow
+              onClick:
+                action: page
+                value: chat
+            - nav: Friends
+              icon: ui:users
+              w: grow
+              onClick:
+                action: page
+                value: friends
+            - nav: Audio
+              icon: ui:music
+              w: grow
+              onClick:
+                action: page
+                value: audio
+            - nav: Accessibility
+              icon: ui:eye
+              w: grow
+              onClick:
+                action: page
+                value: access
+            - nav: Controls
+              icon: ui:keyboard
+              w: grow
+              onClick:
+                action: page
+                value: controls
+          w: 104
+          h: fit
+          gap: 1
+          pad: 2
+          align: start
+          cross: start
+          surface: sheet
+          name: Sidebar
+        - column:
+            - column:
+                - row:
+                    - space: 3
+                    - text: Movement
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:compass
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:arrow-down
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Sneak
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Hold, or press once
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - segmented:
+                            - Hold
+                            - Toggle
+                          selected: 0
+                          bind: set_sneak
+                          compact: true
+                          look: raised
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Sneak
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:arrow-right
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Double-tap sprint
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Tap forward twice
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - switch: true
+                          bind: set_sprint
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Double-tap sprint
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Movement
+            - column:
+                - row:
+                    - space: 3
+                    - text: Abilities
+                      style: heading
+                      align: left
+                      scale: 1
+                      icon: ui:sword
+                      w: grow
+                    - space: 2
+                  w: grow
+                  h: 15
+                  gap: 3
+                  pad: 0
+                  align: start
+                  cross: center
+                  surface: head
+                  name: Heading
+                - column:
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:keyboard
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Ability key
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Your class ability
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - dropdown: F
+                          options:
+                            - F
+                            - R
+                            - G
+                          bind: set_ability_key
+                          w: 40
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Ability key
+                    - row:
+                        - column:
+                            - space: 4
+                            - icon: ui:target
+                              size: 9
+                          w: fit
+                          h: fit
+                          gap: 0
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Icon
+                        - column:
+                            - space: 3
+                            - text: Aim assist
+                              style: body
+                              align: left
+                              scale: 1
+                              w: fit
+                            - text: Snap to targets
+                              style: muted
+                              align: left
+                              scale: 1
+                              w: fit
+                          w: grow
+                          h: fit
+                          gap: 1
+                          pad: 0
+                          align: start
+                          cross: start
+                          name: Words
+                        - slider: 50
+                          min: 0
+                          max: 100
+                          step: 25
+                          unit: "%"
+                          bind: set_aim
+                          w: 100
+                      w: grow
+                      h: fit
+                      gap: 5
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Aim assist
+                  w: grow
+                  h: fit
+                  gap: 9
+                  pad: 5
+                  align: start
+                  cross: start
+                  name: Body
+              w: grow
+              h: fit
+              gap: 0
+              pad: 1
+              align: start
+              cross: start
+              surface: sheet
+              name: Abilities
+            - row:
+                - space: grow
+                - button: Done
+                  icon: ui:check
+                  look: light
+                  w: fit
+                  onClick:
+                    action: close
+                    value: ""
+              w: grow
+              h: fit
+              gap: 4
+              pad: 0
+              align: start
+              cross: center
+          w: grow
+          h: fit
+          gap: 6
+          pad: 0
+          align: start
+          cross: start
+          perPage: true
+          name: Page
+      w: fit
+      h: fit
+      gap: 6
+      pad: 0
+      align: start
+      cross: start
+      theme:
+        face: "#c6c6c6"
+        accent: "#3670f8"
+contentWidth: 360
+columns: 2
+hideFooter: true
+canCloseWithEscape: true
+pause: true
+showWarning: false
+afterAction: none
+drawButtons: true
+nudge:
+  x: 0
+  y: 0
+buttons: []
+inputs: []

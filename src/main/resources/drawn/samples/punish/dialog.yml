@@ -1,0 +1,312 @@
+# samples:punish - a staff panel about one player, drawn with a resource pack.
+# /sample-punish <player> opens it, or Punish menu in /dialog-samples.
+#
+# Reason, Length and Silent are settings kept on the player who clicks
+# them; an action can print them, {pun_reason} {pun_length} {pun_silent}.
+# The buttons only say what they would do. To make Ban ban, change its
+# value to your punishment plugin's command, e.g.
+#   value: "[console] ban {target} {pun_reason}; [message] <red>Banned {target}"
+#
+# A drawn dialog: Studio's dialog editor document, as YAML.
+# Edit it with /de edit, or by hand here and run /de reload: a changed
+# file is redrawn by Studio (resourcepack.ai), which needs the internet.
+title: Punish {target}
+command: sample-punish
+commandPermission: dialogengine.samples
+style: dialog
+document:
+  column:
+    - row:
+        - column:
+            - row:
+                - icon: head:{target}
+                  size: 24
+                  frame: true
+                - column:
+                    - space: 2
+                    - text: "{target}"
+                      style: heading
+                      align: left
+                      scale: 1
+                      w: fit
+                    - text: Sample panel
+                      style: muted
+                      align: left
+                      scale: 1
+                      w: fit
+                  w: fit
+                  h: fit
+                  gap: 2
+                  pad: 0
+                  align: start
+                  cross: start
+              w: fit
+              h: fit
+              gap: 5
+              pad: 0
+              align: start
+              cross: center
+            - pair:
+                - Reason
+                - "{pun_reason?hacking:Hacking|"
+              style: gold
+              w: grow
+            - pair:
+                - Length
+                - "{pun_length?1h:1h|1d:1d|7d:7"
+              style: body
+              w: grow
+            - pair:
+                - Silent
+                - "{pun_silent?on:Yes|No}"
+              style: body
+              w: grow
+          w: 112
+          h: grow
+          gap: 4
+          pad: 5
+          align: start
+          cross: start
+          surface: sheet
+          name: Card
+        - column:
+            - row:
+                - space: 3
+                - text: Punishment
+                  style: heading
+                  align: left
+                  scale: 1
+                  w: grow
+                - space: 2
+              w: grow
+              h: 15
+              gap: 3
+              pad: 0
+              align: start
+              cross: center
+              surface: head
+              name: Heading
+            - column:
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:warning
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Reason
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - dropdown: Hacking
+                      options:
+                        - Hacking
+                        - Spam
+                        - Toxicity
+                        - Griefing
+                        - Advertising
+                        - Other
+                      bind: pun_reason
+                      w: 86
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Reason
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:hourglass
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Length
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - segmented:
+                        - 1h
+                        - 1d
+                        - 7d
+                        - Perm
+                      selected: 0
+                      bind: pun_length
+                      compact: true
+                      look: raised
+                      w: fit
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Length
+                - row:
+                    - column:
+                        - space: 4
+                        - icon: ui:eye-off
+                          size: 9
+                      w: fit
+                      h: fit
+                      gap: 0
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Icon
+                    - column:
+                        - space: 3
+                        - text: Silent
+                          style: body
+                          align: left
+                          scale: 1
+                          w: fit
+                      w: grow
+                      h: fit
+                      gap: 1
+                      pad: 0
+                      align: start
+                      cross: start
+                      name: Words
+                    - switch: false
+                      bind: pun_silent
+                  w: grow
+                  h: fit
+                  gap: 5
+                  pad: 0
+                  align: start
+                  cross: start
+                  name: Silent
+              w: grow
+              h: fit
+              gap: 9
+              pad: 5
+              align: start
+              cross: start
+              name: Body
+          w: grow
+          h: grow
+          gap: 0
+          pad: 1
+          align: start
+          cross: start
+          surface: sheet
+          name: Punishment
+      w: grow
+      h: fit
+      gap: 4
+      pad: 0
+      align: start
+      cross: start
+    - row:
+        - button: Pick player
+          icon: ui:users
+          align: left
+          look: light
+          w: 112
+          onClick:
+            action: run_command
+            value: "[open] punish_pick"
+        - button: Warn
+          icon: ui:warning
+          look: light
+          w: grow
+          onClick:
+            action: run_command
+            value: "[message] <gray>Sample: this would warn <white>{target}</white> for <white>{pun_reason?hacking:Hacking|spam:Spam|toxicity:Toxicity|griefing:Griefing|advertising:Advertising|other:Other|Hacking}</white>. Edit dialog.yml to run your punishment plugin's command."
+        - button: Mute
+          icon: ui:mute
+          look: light
+          w: grow
+          onClick:
+            action: run_command
+            value: "[message] <gray>Sample: this would mute <white>{target}</white> for <white>{pun_reason?hacking:Hacking|spam:Spam|toxicity:Toxicity|griefing:Griefing|advertising:Advertising|other:Other|Hacking}</white>, <white>{pun_length?1h:1h|1d:1d|7d:7d|perm:Perm|1h}</white>. Edit dialog.yml to run your punishment plugin's command."
+      w: grow
+      h: fit
+      gap: 4
+      pad: 0
+      align: start
+      cross: center
+    - row:
+        - button: Close
+          icon: ui:exit
+          align: left
+          look: light
+          w: 112
+          onClick:
+            action: close
+            value: ""
+        - button: Kick
+          icon: ui:exit
+          look: light
+          w: grow
+          onClick:
+            action: run_command
+            value: "[message] <gray>Sample: this would kick <white>{target}</white> for <white>{pun_reason?hacking:Hacking|spam:Spam|toxicity:Toxicity|griefing:Griefing|advertising:Advertising|other:Other|Hacking}</white>. Edit dialog.yml to run your punishment plugin's command."
+        - button: Ban
+          icon: ui:hammer
+          selected: true
+          look: light
+          w: grow
+          onClick:
+            action: run_command
+            value: "[message] <gray>Sample: this would ban <white>{target}</white> for <white>{pun_reason?hacking:Hacking|spam:Spam|toxicity:Toxicity|griefing:Griefing|advertising:Advertising|other:Other|Hacking}</white>, <white>{pun_length?1h:1h|1d:1d|7d:7d|perm:Perm|1h}</white>. Edit dialog.yml to run your punishment plugin's command."
+      w: grow
+      h: fit
+      gap: 4
+      pad: 0
+      align: start
+      cross: center
+  w: fit
+  h: fit
+  gap: 3
+  pad: 0
+  align: start
+  cross: start
+  theme:
+    face: "#c6c6c6"
+    accent: "#d8402f"
+contentWidth: 320
+columns: 2
+hideFooter: true
+canCloseWithEscape: true
+pause: true
+showWarning: false
+afterAction: close
+drawButtons: true
+nudge:
+  x: 0
+  y: 0
+buttons: []
+inputs: []

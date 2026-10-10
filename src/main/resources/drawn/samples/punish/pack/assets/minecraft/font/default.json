@@ -1,0 +1,29 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "": 0,
+        "": 0
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:font/dialog_samples_punish_background.png",
+      "ascent": 7,
+      "height": 133,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:font/dialog_samples_punish_tile_r0c1.png",
+      "ascent": 7,
+      "height": 133,
+      "chars": [
+        ""
+      ]
+    }
+  ]
+}
