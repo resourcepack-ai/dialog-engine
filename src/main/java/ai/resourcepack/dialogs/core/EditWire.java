@@ -7,8 +7,8 @@ import java.util.Map;
  *
  * <p>The other end is Studio's edit-session wire, the same one RP Engine's
  * {@code /rp edit} uses: a session of kind {@code dialog}, carrying ONE dialog
- * as JSON. Studio's wire check compares these classes with its own shapes field
- * for field, so a rename here is a rename there.
+ * as JSON. Studio reads and writes these field names exactly, so renaming one
+ * here breaks {@code /de edit} until Studio is changed to match.
  */
 final class EditWire {
 

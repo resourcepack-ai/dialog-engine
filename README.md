@@ -14,6 +14,21 @@ Runs on **Spigot or Paper 1.21.7 or newer**, one jar for both, with players
 on a 1.21.6+ client.
 [PlaceholderAPI](https://www.spigotmc.org/resources/6245/) is optional.
 
+## Installing
+
+Download the jar from
+[SpigotMC](https://www.spigotmc.org/resources/139513/), drop it in
+`plugins/` and restart. The first start writes `config.yml`, the sample
+dialogs and `AI-GUIDE.md` into `plugins/DialogEngine/`.
+
+Two things talk to the internet, and both can be turned off in `config.yml`:
+`update-check` asks SpigotMC for the latest version, and `telemetry` sends an
+anonymous count (a random id, the number of players online and the names of
+plugins that depend on Dialog Engine) every 30 seconds. Drawn dialogs are the
+third: `/de edit`, and a drawn dialog whose `dialog.yml` was edited by hand,
+send that one dialog to the editor at `edit.url` to be drawn. Plain YAML
+dialogs never leave the server.
+
 ## Commands
 
 | Command | |
@@ -332,3 +347,28 @@ runs a command that is in its `dialog.yml`.
 Under `after: wait` (the default) the client shows a waiting screen until the
 engine answers, so one dialog replaces another with no flash of the world in
 between.
+
+## Building
+
+JDK 21. Dialog Engine compiles part of [RP Engine](https://github.com/resourcepack-ai/rp-engine)
+in (the code that runs drawn dialogs), so clone it beside this repository:
+
+```bash
+git clone https://github.com/resourcepack-ai/rp-engine
+git clone https://github.com/resourcepack-ai/dialog-engine
+cd dialog-engine
+./gradlew build
+```
+
+The plugin is `build/libs/dialog-engine-<version>.jar`. Other dependencies
+come from Maven Central, SpigotMC's repository and
+[repo.resourcepack.ai](https://repo.resourcepack.ai) (`ai.resourcepack:common`,
+a small shared library for the update check and usage count).
+
+## Support
+
+Questions, bugs and ideas: [the ResourcePack AI Discord](https://resourcepack.ai/discord).
+
+## Licence
+
+[GPL-3.0](LICENSE).

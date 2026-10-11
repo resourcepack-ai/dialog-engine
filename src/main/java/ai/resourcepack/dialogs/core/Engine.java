@@ -279,7 +279,7 @@ public final class Engine implements DialogEngineAPI {
         return dialogs.get(id);
     }
 
-    /** "confirm" inside namespace "verdict" is "verdict:confirm". */
+    /** "confirm" inside namespace "myplugin" is "myplugin:confirm". */
     String qualify(String id, String namespace) {
         String trimmed = id.trim().toLowerCase(Locale.ROOT);
         if (trimmed.contains(":") || namespace == null) return trimmed;

@@ -1,7 +1,7 @@
 // The drawn sample dialogs: Dialog-style documents, drawn by Studio into the
 // folders Dialog Engine keeps a drawn dialog in, and shipped in the jar.
 //
-//   node dialog-engine/samples-src/make.mjs [--studio https://studio.resourcepack.ai]
+//   node samples-src/make.mjs [--studio https://studio.resourcepack.ai]
 //
 // Writes src/main/resources/drawn/samples/<name>/ for each: dialog.yml (the
 // document, the file a server owner edits), .built (its hash, so the plugin
@@ -16,14 +16,23 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const YAML = createRequire(join(here, "../../studio/package.json"))("yaml");
+// The `yaml` package: installed here (npm install yaml), or else Studio's copy
+// when a Studio checkout sits beside this directory.
+const YAML = (() => {
+  for (const from of [import.meta.url, join(here, "../../studio/package.json")]) {
+    try {
+      return createRequire(from)("yaml");
+    } catch {}
+  }
+  throw new Error("make.mjs needs the yaml package: npm install yaml");
+})();
 const args = process.argv.slice(2);
 const studio = (args.includes("--studio") ? args[args.indexOf("--studio") + 1] : "https://studio.resourcepack.ai").replace(/\/$/, "");
 const root = join(here, "../src/main/resources/drawn/samples");
 
 // ------------------------------------------------------------------ punish
 
-// A staff panel about one player, after Verdict's: who, the punishment being
+// A staff panel about one player: who, the punishment being
 // chosen (three player settings, so the panel remembers them), and a button
 // per punishment. The buttons only say what they would do: a sample must not
 // ban anybody. Each one's comment in dialog.yml shows the real command.

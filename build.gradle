@@ -98,15 +98,28 @@ processResources {
 
 
 // Drawn dialogs (Studio's) run on RP Engine's own dialog code, compiled in
-// from ../rp-engine at build time rather than copied by hand, so the two
-// plugins cannot drift: the same placeholder pass, the same list rows, bars,
-// "show when" conditions and packet route. Only the package, one version
+// from a checkout of RP Engine beside this one (../rp-engine, from
+// https://github.com/resourcepack-ai/rp-engine) rather than copied by hand, so
+// the two plugins cannot drift: the same placeholder pass, the same list rows,
+// bars, "show when" conditions and packet route. Only the package, one version
 // check and the name a warning is logged under are rewritten.
 def engineDialogs = file('../rp-engine/src/main/java/ai/resourcepack/engine/core/dialog')
 def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions']
 def generatedDialogs = layout.buildDirectory.dir('generated/rpe-dialogs')
 
+// A Copy with nothing to copy is skipped rather than failed, which would leave
+// compileJava to fail on missing classes; say what is missing instead.
+tasks.register('checkEngineDialogs') {
+    doLast {
+        if (!engineDialogs.isDirectory()) {
+            throw new GradleException('Dialog Engine compiles part of RP Engine in. Clone it beside this directory first:\n' +
+                    '  git clone https://github.com/resourcepack-ai/rp-engine ../rp-engine')
+        }
+    }
+}
+
 tasks.register('copyEngineDialogs', Copy) {
+    dependsOn 'checkEngineDialogs'
     from(engineDialogs) {
         include sharedDialogs.collect { "${it}.java" }
     }

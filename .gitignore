@@ -3,6 +3,3 @@ build/
 .idea/
 *.iml
 out/
-
-# The Paper jar the integration runner downloads. 50MB, and reproducible.
-integration/.cache/
