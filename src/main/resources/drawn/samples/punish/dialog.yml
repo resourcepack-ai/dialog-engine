@@ -46,21 +46,22 @@ document:
               pad: 0
               align: start
               cross: center
-            - pair:
-                - Reason
-                - "{pun_reason?hacking:Hacking|"
-              style: gold
-              w: grow
-            - pair:
-                - Length
-                - "{pun_length?1h:1h|1d:1d|7d:7"
-              style: body
-              w: grow
-            - pair:
-                - Silent
-                - "{pun_silent?on:Yes|No}"
-              style: body
-              w: grow
+            - space: 2
+            - text: Pick a reason and
+              style: muted
+              align: left
+              scale: 1
+              w: fit
+            - text: a length, then a
+              style: muted
+              align: left
+              scale: 1
+              w: fit
+            - text: punishment below.
+              style: muted
+              align: left
+              scale: 1
+              w: fit
           w: 112
           h: grow
           gap: 4

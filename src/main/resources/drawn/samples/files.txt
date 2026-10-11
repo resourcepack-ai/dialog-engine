@@ -42,7 +42,6 @@ punish/pack/assets/minecraft/textures/font/dialog_live_accented.png
 punish/pack/assets/minecraft/textures/font/dialog_live_ascii.png
 punish/pack/assets/minecraft/font/dialog_live_1_5.json
 punish/pack/assets/minecraft/font/dialog_live_back_1_bold.json
-punish/pack/assets/minecraft/font/dialog_live_back_1.json
 punish/pack/assets/minecraft/textures/gui/sprites/dialog/warning_button.png
 punish/pack/assets/minecraft/textures/gui/sprites/dialog/warning_button_disabled.png
 punish/pack/assets/minecraft/textures/gui/sprites/dialog/warning_button_highlighted.png

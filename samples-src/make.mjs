@@ -41,7 +41,6 @@ const LENGTHS = ["1h", "1d", "7d", "Perm"];
 const choice = (bind, options) => `{${bind}?${options.map((o) => `${o.toLowerCase()}:${o}`).join("|")}|${options[0]}}`;
 const REASON = choice("pun_reason", REASONS);
 const LENGTH = choice("pun_length", LENGTHS);
-const SILENT = "{pun_silent?on:Yes|No}";
 const would = (what) =>
   `[message] <gray>Sample: this would ${what} <white>{target}</white> for <white>${REASON}</white>` +
   `${what === "warn" || what === "kick" ? "" : `, <white>${LENGTH}</white>`}.` +
@@ -70,9 +69,10 @@ const punish = {
                 gap: 5,
                 cross: "center",
               },
-              { pair: ["Reason", REASON], style: "gold", w: "grow" },
-              { pair: ["Length", LENGTH], style: "body", w: "grow" },
-              { pair: ["Silent", SILENT], style: "body", w: "grow" },
+              { space: 2 },
+              { text: "Pick a reason and", style: "muted" },
+              { text: "a length, then a", style: "muted" },
+              { text: "punishment below.", style: "muted" },
             ],
             gap: 4,
             h: "grow",
