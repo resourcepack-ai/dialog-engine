@@ -14,8 +14,27 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** {@code /dialogengine} ({@code /de}): list, open, info, reload. */
+/**
+ * {@code /dialogengine} ({@code /de}): list, open, info, edit, pack, reload.
+ *
+ * <p>The command itself needs nothing: each subcommand checks its own
+ * {@code dialogengine.<subcommand>} (see {@link #permissionFor}), and opening a
+ * dialog on somebody else also needs {@code dialogengine.open.others}.
+ * {@code dialogengine.admin} is a parent in plugin.yml that grants them all,
+ * never a node this class checks.
+ */
 public final class AdminCommand implements TabExecutor {
+
+    /** Every subcommand, in the order help and tab-completion show them. */
+    public static final List<String> SUBCOMMANDS = List.of("list", "open", "info", "edit", "pack", "reload");
+
+    /** What running {@code /de <sub>} needs. */
+    public static String permissionFor(String sub) {
+        return "dialogengine." + sub;
+    }
+
+    /** What opening a dialog on a player other than yourself needs, on top of {@code dialogengine.open}. */
+    public static final String OPEN_OTHERS = "dialogengine.open.others";
 
     private final Engine engine;
 
@@ -30,6 +49,10 @@ public final class AdminCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String sub = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
+        if (SUBCOMMANDS.contains(sub) && !sender.hasPermission(permissionFor(sub))) {
+            say(sender, "<red>You need " + permissionFor(sub) + " for that.");
+            return true;
+        }
         switch (sub) {
             case "reload" -> {
                 engine.drawn.notifyNext(sender);
@@ -103,6 +126,10 @@ public final class AdminCommand implements TabExecutor {
                     say(sender, "Say which player: /de open " + id + " <player>");
                     return true;
                 }
+                if (target != sender && !sender.hasPermission(OPEN_OTHERS)) {
+                    say(sender, "<red>You need " + OPEN_OTHERS + " to open a dialog on somebody else.");
+                    return true;
+                }
                 if (engine.def(id) == null && !engine.drawn.has(id)) {
                     say(sender, "<red>There is no dialog called " + Text.MM.escapeTags(id) + ". <gray>/de list");
                     return true;
@@ -133,7 +160,17 @@ public final class AdminCommand implements TabExecutor {
                         + (d.args().isEmpty() ? "" : ", args " + String.join(" ", d.args()))));
             }
             default -> {
-                say(sender, "<white>/de list</white> <dark_gray>·</dark_gray> <white>/de open <id> [player] [key=value]</white> <dark_gray>·</dark_gray> <white>/de info <id></white> <dark_gray>·</dark_gray> <white>/de edit <id></white> <dark_gray>·</dark_gray> <white>/de pack</white> <dark_gray>·</dark_gray> <white>/de reload</white>");
+                List<String> usable = new ArrayList<>();
+                for (String s : SUBCOMMANDS) {
+                    if (!sender.hasPermission(permissionFor(s))) continue;
+                    usable.add("<white>" + switch (s) {
+                        case "open" -> sender.hasPermission(OPEN_OTHERS) ? "/de open <id> [player] [key=value]" : "/de open <id> [key=value]";
+                        case "info", "edit" -> "/de " + s + " <id>";
+                        default -> "/de " + s;
+                    } + "</white>");
+                }
+                if (usable.isEmpty()) say(sender, "<red>You don't have permission to use Dialog Engine's commands.");
+                else say(sender, String.join(" <dark_gray>·</dark_gray> ", usable));
             }
         }
         return true;
@@ -143,10 +180,16 @@ public final class AdminCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> out = new ArrayList<>();
         if (args.length == 1) {
-            for (String s : List.of("list", "open", "info", "edit", "pack", "reload")) if (s.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(s);
-        } else if (args.length == 2 && (args[0].equalsIgnoreCase("open") || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("edit"))) {
+            for (String s : SUBCOMMANDS) {
+                if (s.startsWith(args[0].toLowerCase(Locale.ROOT)) && sender.hasPermission(permissionFor(s))) out.add(s);
+            }
+            return out;
+        }
+        String sub = args[0].toLowerCase(Locale.ROOT);
+        if (!SUBCOMMANDS.contains(sub) || !sender.hasPermission(permissionFor(sub))) return out;
+        if (args.length == 2 && (args[0].equalsIgnoreCase("open") || args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("edit"))) {
             for (String id : engine.ids()) if (id.startsWith(args[1].toLowerCase(Locale.ROOT))) out.add(id);
-        } else if (args.length == 3 && args[0].equalsIgnoreCase("open")) {
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("open") && sender.hasPermission(OPEN_OTHERS)) {
             for (Player p : Bukkit.getOnlinePlayers()) if (p.getName().toLowerCase(Locale.ROOT).startsWith(args[2].toLowerCase(Locale.ROOT))) out.add(p.getName());
         }
         return out;

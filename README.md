@@ -31,15 +31,38 @@ dialogs never leave the server.
 
 ## Commands
 
-| Command | |
-|---|---|
-| `/de list` | Every dialog, by namespace, with its command |
-| `/de open <id> [player] [key=value ...]` | Open one on somebody, with values |
-| `/de info <id>` | What a dialog is made of |
-| `/de reload` | Read everything again, and say what is wrong |
+| Command | | Permission |
+|---|---|---|
+| `/de list` | Every dialog, by namespace, with its command | `dialogengine.list` |
+| `/de open <id> [player] [key=value ...]` | Open one, with values | `dialogengine.open` |
+| `/de info <id>` | What a dialog is made of | `dialogengine.info` |
+| `/de edit <id>` | Draw one in the browser editor, or make a new one | `dialogengine.edit` |
+| `/de pack` | Write the drawn dialogs' resource pack to a file | `dialogengine.pack` |
+| `/de reload` | Read everything again, and say what is wrong | `dialogengine.reload` |
 
-`/dialogengine` and `/dialogs` are the same command. Permission:
-`dialogengine.admin`.
+`/dialogengine` and `/dialogs` are the same command.
+
+## Permissions
+
+Every node is op-only by default.
+
+| Node | Allows |
+|---|---|
+| `dialogengine.list` | `/de list` |
+| `dialogengine.open` | `/de open` on yourself. It opens any dialog, whatever `permission:` the dialog asks for |
+| `dialogengine.open.others` | `/de open <id> <player>` on somebody else, on top of `dialogengine.open` |
+| `dialogengine.info` | `/de info` |
+| `dialogengine.edit` | `/de edit`. Pressing Send in the editor writes files into the server's dialog folder |
+| `dialogengine.pack` | `/de pack` |
+| `dialogengine.reload` | `/de reload` |
+| `dialogengine.pack.notify` | Being told the address players download the drawn dialogs' pack from, when it fails to load for you |
+| `dialogengine.samples` | Opening the sample dialogs |
+| `dialogengine.update` | Being told on joining that a newer Dialog Engine is out |
+| `dialogengine.admin` | All of the above, in one node |
+
+A dialog's own `permission:` (who may open it with its command) and a
+button's are whatever node you write there; Dialog Engine declares none of
+them.
 
 ## Samples
 

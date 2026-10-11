@@ -198,7 +198,7 @@ public final class Engine implements DialogEngineAPI {
                 drawnPack.refused(player);
                 if (waitingForPack.remove(player.getUniqueId()) != null) {
                     tell(player, message("pack-failed", "<red>This menu's resource pack could not be loaded."));
-                    if (player.hasPermission("dialogengine.admin")) {
+                    if (player.hasPermission("dialogengine.pack.notify")) {
                         tell(player, "<gray>Players download it from <white>" + Text.MM.escapeTags(drawnPack.url())
                                 + "</white>. If that is not this server's address, set <white>pack.public-host</white> in Dialog Engine's config.yml.");
                     }

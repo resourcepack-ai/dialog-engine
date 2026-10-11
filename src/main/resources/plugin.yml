@@ -11,13 +11,49 @@ commands:
     description: List, open, inspect and reload dialogs.
     usage: /de <list|open|info|edit|pack|reload>
     aliases: [de, dialogs]
-    permission: dialogengine.admin
+    # No permission on the command itself. Each subcommand checks its own
+    # dialogengine.<name>; see AdminCommand.
   dialogclick:
     description: What a click on a drawn dialog runs. Only does what the dialog you were shown allows.
     usage: /dialogclick
 permissions:
   dialogengine.admin:
-    description: Use /dialogengine (list, open dialogs on anybody, reload).
+    description: Everything below. A convenience parent, not a node anything checks.
+    default: op
+    children:
+      dialogengine.list: true
+      dialogengine.open: true
+      dialogengine.open.others: true
+      dialogengine.info: true
+      dialogengine.edit: true
+      dialogengine.pack: true
+      dialogengine.reload: true
+      dialogengine.pack.notify: true
+      dialogengine.samples: true
+      dialogengine.update: true
+  dialogengine.list:
+    description: /de list, every dialog on the server and its command.
+    default: op
+  dialogengine.open:
+    description: /de open <id> on yourself, any dialog, whatever permission the dialog itself asks for.
+    default: op
+  dialogengine.open.others:
+    description: /de open <id> <player> on somebody else (with dialogengine.open), and from the console or a command block.
+    default: op
+  dialogengine.info:
+    description: /de info <id>, what a dialog is made of.
+    default: op
+  dialogengine.edit:
+    description: /de edit <id>, open a dialog in the browser editor, or make a new one. Pressing Send writes files into the server's dialog folder.
+    default: op
+  dialogengine.pack:
+    description: /de pack, write the drawn dialogs' resource pack to a file.
+    default: op
+  dialogengine.reload:
+    description: /de reload, read every dialog again and see what is wrong.
+    default: op
+  dialogengine.pack.notify:
+    description: When a drawn dialog's resource pack fails to load for you, be told the address players download it from.
     default: op
   dialogengine.samples:
     description: Open the sample dialogs in dialogs/samples/.
