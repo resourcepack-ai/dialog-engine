@@ -354,7 +354,14 @@ for (const sample of SAMPLES) {
     if (!/^pack\/[A-Za-z0-9._/-]+$/.test(f.path) || f.path.includes("..")) throw new Error(`refused ${f.path}`);
     const target = join(dir, f.path);
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, f.encoding === "base64" ? Buffer.from(f.content, "base64") : f.content);
+    let content = f.encoding === "base64" ? Buffer.from(f.content, "base64") : f.content;
+    if (f.path === "pack/pack.mcmeta") {
+      // Studio names the pack after the label sent; the pack list should say what it is.
+      const mcmeta = JSON.parse(content.toString());
+      mcmeta.pack.description = `Dialog Engine sample: ${sample.name} (Minecraft ${body.minecraftVersion})`;
+      content = JSON.stringify(mcmeta, null, 2);
+    }
+    writeFileSync(target, content);
     listed.push(`${sample.name}/${f.path}`);
   }
   console.log(`${sample.name}: ${pull.dialog.built.length} page(s), ${(pull.files ?? []).length} pack files`);

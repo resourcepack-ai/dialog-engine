@@ -29,8 +29,7 @@ void main() {
     rpe_head_vertex_main();
 
     // A live player head in a dialog: the game's 8x8 face, scaled from its
-    // top-left to the size and dropped to the place its colour says. See
-    // lib/dialogs/head-shader.ts.
+    // top-left to the size and dropped to the place its colour says.
     if (abs(ProjMat[3][3] - 1.0) < 0.001) {
         ivec3 rpeHead = ivec3(floor(Color.rgb * 255.0 + 0.5));
         vec2 rpeEighths = UV0 * 8.0;

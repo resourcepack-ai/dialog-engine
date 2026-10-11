@@ -22,8 +22,8 @@ out vec4 vertexColor;
 
 noperspective out float rpaiFooter;
 
-// ResourcePack AI: a dialog's hidden footer button. See studio's
-// lib/dialogs/hidden-footer.ts.
+// ResourcePack AI: hides a dialog's footer button, which the dialog draws
+// itself.
 float rpaiFooterCorner(vec2 position, mat4 projection) {
     // Orthographic only: the GUI. A perspective matrix has -1 here.
     if (projection[0][0] <= 0.0 || abs(projection[2][3]) > 0.001) return 0.0;

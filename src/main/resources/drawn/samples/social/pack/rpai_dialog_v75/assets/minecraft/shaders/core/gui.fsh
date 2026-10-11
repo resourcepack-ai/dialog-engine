@@ -13,9 +13,9 @@ in vec4 vertexColor;
 
 out vec4 fragColor;
 
-// ResourcePack AI: the white frame round a dialog's body. See studio's
-// lib/dialogs/focus-outline.ts. Vanilla's own shader is further down, unchanged
-// but for its name.
+// ResourcePack AI: hides the white frame the game draws round a dialog's body
+// when it is clicked. Vanilla's own shader is further down, unchanged but for
+// its name.
 const int RPAI_BODY_A = 400;
 const int RPAI_BODY_B = 256;
 const int RPAI_INSET = 0;

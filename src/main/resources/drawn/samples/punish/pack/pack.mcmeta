@@ -3,7 +3,7 @@
     "pack_format": 75,
     "min_format": 75,
     "max_format": 75,
-    "description": "AI Generated Resource Pack (Minecraft 1.21.11)"
+    "description": "Dialog Engine sample: punish (Minecraft 1.21.11)"
   },
   "overlays": {
     "entries": [
