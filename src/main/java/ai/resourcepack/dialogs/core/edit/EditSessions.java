@@ -1,5 +1,9 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.edit;
 
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.drawn.DrawnFiles;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.kyori.adventure.text.Component;
@@ -48,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * the key it sent. What comes back names its path and key, and both are checked
  * against what went out, because the answer comes over the network.
  */
-final class EditSessions {
+public final class EditSessions {
 
     private static final long POLL_TICKS = 60L;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
@@ -66,7 +70,7 @@ final class EditSessions {
     private final Map<String, Live> sessions = new ConcurrentHashMap<>();
     private BukkitTask poller;
 
-    EditSessions(Engine engine) {
+    public EditSessions(Engine engine) {
         this.engine = engine;
         this.plugin = engine.plugin();
     }
@@ -108,7 +112,7 @@ final class EditSessions {
      * own dialog editor. A plain YAML dialog is edited in its file, and a name
      * held by one is not taken; any other name is a drawn dialog, new or not.
      */
-    void open(CommandSender sender, String dialogId) {
+    public void open(CommandSender sender, String dialogId) {
         if (!dialogId.matches("[a-z0-9_\\-]+:[a-z0-9_\\-]+")) {
             say(sender, "Name a dialog as namespace:name, like <white>server:shop</white> (a-z, 0-9, _ and -).");
             return;
@@ -244,7 +248,7 @@ final class EditSessions {
      * with what a pull would have been. Off the main thread; {@code done} runs
      * on it, with null on success or why it failed.
      */
-    void redraw(String dialogId, File dir, java.util.function.Consumer<String> done) {
+    public void redraw(String dialogId, File dir, java.util.function.Consumer<String> done) {
         Map<String, Object> spec;
         try {
             spec = DrawnFiles.read(dir.toPath());
@@ -284,7 +288,7 @@ final class EditSessions {
         });
     }
 
-    void shutdown() {
+    public void shutdown() {
         if (poller != null) poller.cancel();
         sessions.clear();
     }

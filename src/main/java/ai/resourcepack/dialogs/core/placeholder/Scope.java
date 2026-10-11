@@ -1,6 +1,7 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import ai.resourcepack.dialogs.api.DialogContext;
+import ai.resourcepack.dialogs.core.Engine;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -13,17 +14,17 @@ import java.util.Set;
  * dialog's own values, then the engine's built-ins, then the resolvers other
  * plugins registered. A name nothing knows is left as written.
  */
-final class Scope implements DialogContext {
+public final class Scope implements DialogContext {
 
     final Engine engine;
-    final Player viewer;
-    final String dialogId;
-    final Map<String, String> values;
+    public final Player viewer;
+    public final String dialogId;
+    public final Map<String, String> values;
     final Set<String> untrusted;
-    final String alias;
-    final Map<String, String> row;
+    public final String alias;
+    public final Map<String, String> row;
 
-    Scope(Engine engine, Player viewer, String dialogId, Map<String, String> values, Set<String> untrusted,
+    public Scope(Engine engine, Player viewer, String dialogId, Map<String, String> values, Set<String> untrusted,
           String alias, Map<String, String> row) {
         this.engine = engine;
         this.viewer = viewer;
@@ -34,12 +35,12 @@ final class Scope implements DialogContext {
         this.row = row;
     }
 
-    Scope withRow(String alias, Map<String, String> row) {
+    public Scope withRow(String alias, Map<String, String> row) {
         return new Scope(engine, viewer, dialogId, values, untrusted, alias, row);
     }
 
     /** The value for {@code key}, or null when nothing knows it. */
-    String lookup(String key) {
+    public String lookup(String key) {
         if (row != null && alias != null) {
             if (key.equals(alias)) return row.getOrDefault("value", row.getOrDefault("id", ""));
             if (key.startsWith(alias + ".")) {

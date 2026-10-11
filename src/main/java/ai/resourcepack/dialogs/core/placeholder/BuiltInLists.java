@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 /** The lists every server has: {@code online_players}, {@code other_players} and {@code worlds}. */
-final class BuiltInLists {
+public final class BuiltInLists {
 
     private BuiltInLists() {}
 
-    static List<Map<String, String>> rows(String list, Scope scope) {
+    public static List<Map<String, String>> rows(String list, Scope scope) {
         return switch (list) {
             case "online_players" -> players(scope.viewer, true);
             case "other_players" -> players(scope.viewer, false);

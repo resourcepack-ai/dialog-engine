@@ -1,5 +1,7 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.edit.EditWire;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -45,9 +47,9 @@ import java.util.regex.Pattern;
  * A folder from 0.2.0's first builds has a {@code spec.json} instead, and is
  * moved over to {@code dialog.yml} the first time it is read.
  */
-final class DrawnFiles {
+public final class DrawnFiles {
 
-    static final String SOURCE = "dialog.yml";
+    public static final String SOURCE = "dialog.yml";
     private static final String BUILT = ".built";
     private static final String HEADER = """
             # A drawn dialog: Studio's dialog editor document, as YAML.
@@ -65,7 +67,7 @@ final class DrawnFiles {
 
     /** The dialog as Studio's document, or null when the folder has none. */
     @SuppressWarnings("unchecked")
-    static Map<String, Object> read(Path dir) throws IOException {
+    public static Map<String, Object> read(Path dir) throws IOException {
         Path yml = dir.resolve(SOURCE);
         if (Files.isRegularFile(yml)) {
             Object loaded = yaml().load(Files.readString(yml, StandardCharsets.UTF_8));
@@ -111,7 +113,7 @@ final class DrawnFiles {
      * the network: one path leaving the dialog's own {@code pack/} folder and
      * nothing is.
      */
-    static void writeDrawing(Path dir, EditWire.Pull pull, boolean writeSource) throws IOException {
+    public static void writeDrawing(Path dir, EditWire.Pull pull, boolean writeSource) throws IOException {
         // The drawing may only run commands its document has: the document that
         // came with it, or (a redraw) the one here, which Studio cannot change.
         Map<String, Object> source = writeSource ? pull.dialog.spec : read(dir);
@@ -166,7 +168,7 @@ final class DrawnFiles {
     }
 
     /** Every string in the document, as a command: what a drawing of it may run. */
-    static Set<String> commands(Map<String, Object> spec) {
+    public static Set<String> commands(Map<String, Object> spec) {
         Set<String> out = new HashSet<>();
         if (spec != null) collect(spec, out);
         return out;
@@ -188,7 +190,7 @@ final class DrawnFiles {
      * Engine's page, var and slot clicks are left out: Studio writes those
      * itself, and they only ever turn a page or set a declared setting.
      */
-    static List<String> invented(JsonElement built, Set<String> allowed) {
+    public static List<String> invented(JsonElement built, Set<String> allowed) {
         List<String> out = new ArrayList<>();
         scan(built, allowed, out);
         return out;

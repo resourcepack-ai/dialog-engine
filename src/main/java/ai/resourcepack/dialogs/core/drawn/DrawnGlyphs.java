@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.drawn;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;

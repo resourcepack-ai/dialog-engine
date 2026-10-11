@@ -1,7 +1,12 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.click;
 
 import ai.resourcepack.dialogs.api.ClickContext;
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.Session;
+import ai.resourcepack.dialogs.core.placeholder.Scope;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.yaml.Defs;
 import org.bukkit.entity.Player;
 
 import java.util.Collections;
@@ -11,7 +16,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** One button press while its actions run. */
-final class ClickCtx implements ClickContext {
+public final class ClickCtx implements ClickContext {
 
     final Engine engine;
     final Player player;
@@ -23,10 +28,10 @@ final class ClickCtx implements ClickContext {
     private final Map<String, String> row;
 
     /** Something has answered the click: a dialog was shown or the screen was closed. */
-    boolean responded;
+    public boolean responded;
     boolean stopped;
 
-    ClickCtx(Engine engine, Player player, DialogDef def, Session session, String buttonId, Map<String, String> inputs,
+    public ClickCtx(Engine engine, Player player, DialogDef def, Session session, String buttonId, Map<String, String> inputs,
              String alias, Map<String, String> row) {
         this.engine = engine;
         this.player = player;
@@ -49,7 +54,7 @@ final class ClickCtx implements ClickContext {
      * Called when the actions are done. A dialog waiting for its response must
      * get one, or the player is left looking at "waiting for the server".
      */
-    void finish() {
+    public void finish() {
         if (responded || def.after() != Defs.After.WAIT_FOR_RESPONSE || !player.isOnline()) return;
         responded = true;
         // Not straight away: an action may have asked a plugin to open the next

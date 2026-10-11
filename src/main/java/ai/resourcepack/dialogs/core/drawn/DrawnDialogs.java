@@ -1,11 +1,14 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.drawn;
 
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
-import ai.resourcepack.dialogs.drawn.DialogBars;
-import ai.resourcepack.dialogs.drawn.DialogConditions;
-import ai.resourcepack.dialogs.drawn.DialogPlaceholders;
-import ai.resourcepack.dialogs.drawn.DialogRows;
-import ai.resourcepack.dialogs.drawn.DialogVariables;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.Session;
+import ai.resourcepack.dialogs.core.click.ClickCtx;
+import ai.resourcepack.dialogs.core.command.OpenCommands;
+import ai.resourcepack.dialogs.core.placeholder.Scope;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.yaml.Defs;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -44,10 +47,10 @@ import java.util.regex.Pattern;
  * ({@link DrawnPack}).
  *
  * <p>They are run by RP Engine's own dialog code, compiled into this plugin
- * (the {@code drawn} package): the same placeholder and choice pass, the same
- * list rows, bars, heads and packet route. What is this plugin's is where they
- * are kept and the clicks they make. A drawn dialog's page turns and bound
- * controls click {@code /rp page} and {@code /rp var}, which are RP Engine's
+ * (copied into this package by the build): the same placeholder and choice
+ * pass, the same list rows, bars, heads and packet route. What is this
+ * plugin's is where they are kept and the clicks they make. A drawn dialog's
+ * page turns and bound controls click {@code /rp page} and {@code /rp var}, which are RP Engine's
  * commands; they are rewritten to {@code /dialogclick} as each dialog loads,
  * and that command honours a click only when the dialog the player was last
  * shown holds exactly it, as RP Engine's does.
@@ -64,7 +67,7 @@ import java.util.regex.Pattern;
  * a drawn dialog is a session like any other ({@code [back]}, the API's events).
  * Several actions in one command are written {@code [a] ...; [b] ...}.
  */
-final class DrawnDialogs {
+public final class DrawnDialogs {
 
     /** The command every drawn dialog's clicks run, as the player. */
     static final String CLICK = "dialogclick";
@@ -81,7 +84,7 @@ final class DrawnDialogs {
      * action lists its clicks run, and which pages stay up when clicked
      * ({@code after_action: none}).
      */
-    record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
+    public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, DialogDef def) {}
 
     /**
@@ -106,14 +109,14 @@ final class DrawnDialogs {
     private final Map<String, Drawn> dialogs = new LinkedHashMap<>();
     private final Map<UUID, Shown> lastShown = new ConcurrentHashMap<>();
     private final List<Command> commands = new ArrayList<>();
-    final List<String> problems = new ArrayList<>();
+    public final List<String> problems = new ArrayList<>();
     /** Drawn dialogs whose dialog.yml was edited since they were drawn. */
     private final Map<String, File> stale = new LinkedHashMap<>();
     private final Set<String> redrawing = ConcurrentHashMap.newKeySet();
     /** Who asked for the reload that found them, told when they are redrawn. */
     private CommandSender notify;
 
-    DrawnDialogs(Engine engine) {
+    public DrawnDialogs(Engine engine) {
         this.engine = engine;
     }
 
@@ -123,13 +126,13 @@ final class DrawnDialogs {
         return variables;
     }
 
-    File folder() {
+    public File folder() {
         return new File(engine.plugin().getDataFolder(), "drawn");
     }
 
     // ------------------------------------------------------------------ loading
 
-    void load() {
+    public void load() {
         dialogs.clear();
         problems.clear();
         stale.clear();
@@ -254,22 +257,22 @@ final class DrawnDialogs {
         return List.copyOf(out);
     }
 
-    boolean has(String id) {
+    public boolean has(String id) {
         return dialogs.containsKey(id.toLowerCase(Locale.ROOT));
     }
 
-    Set<String> ids() {
+    public Set<String> ids() {
         return dialogs.keySet();
     }
 
-    Optional<Drawn> get(String id) {
+    public Optional<Drawn> get(String id) {
         return Optional.ofNullable(dialogs.get(id.toLowerCase(Locale.ROOT)));
     }
 
     // ------------------------------------------------------------------ showing
 
     /** Opens one by id, as a session of its own: through the engine, so it is shown the way every dialog is. */
-    boolean open(Player player, String id, Map<String, String> values, Set<String> untrusted) {
+    public boolean open(Player player, String id, Map<String, String> values, Set<String> untrusted) {
         Drawn d = dialogs.get(id.toLowerCase(Locale.ROOT));
         if (d == null) return false;
         return engine.show(player, new Session(player.getUniqueId(), d.id, values == null ? Map.of() : values,
@@ -280,7 +283,7 @@ final class DrawnDialogs {
      * Shows a session's drawn dialog: on its first page, or (redrawn for the
      * same dialog) on the page the player was looking at.
      */
-    boolean show(Player player, Session session, boolean reopened) {
+    public boolean show(Player player, Session session, boolean reopened) {
         Drawn d = dialogs.get(session.dialogId);
         if (d == null) return false;
         Shown before = lastShown.get(player.getUniqueId());
@@ -360,7 +363,7 @@ final class DrawnDialogs {
      * held it then) while they still hold the dialog's permission. An action
      * click also needs the drawing's nonce, and uses it up.
      */
-    void click(Player player, String[] args) {
+    public void click(Player player, String[] args) {
         if (args.length == 0 || !engine.allowClick(player)) return;
         UUID uuid = player.getUniqueId();
         Shown shown = lastShown.get(uuid);
@@ -461,7 +464,7 @@ final class DrawnDialogs {
         return json.contains("\"command\":" + quoted) || json.contains("\"command\":" + slashed);
     }
 
-    void forget(Player player) {
+    public void forget(Player player) {
         lastShown.remove(player.getUniqueId());
     }
 
@@ -470,7 +473,7 @@ final class DrawnDialogs {
      * by another dialog): none of its clicks work any more. The page they were
      * on is still remembered, for {@code [back]}.
      */
-    void retire(Player player) {
+    public void retire(Player player) {
         lastShown.computeIfPresent(player.getUniqueId(), (k, s) -> s.live ? s.retired() : s);
     }
 
@@ -511,12 +514,12 @@ final class DrawnDialogs {
     // ------------------------------------------------------------------ redrawing
 
     /** How many edited drawn dialogs the last load found. */
-    int staleCount() {
+    public int staleCount() {
         return stale.size();
     }
 
     /** Tells {@code sender}, as well as the console, how the next redraw goes. */
-    void notifyNext(CommandSender sender) {
+    public void notifyNext(CommandSender sender) {
         notify = sender;
     }
 
@@ -525,7 +528,7 @@ final class DrawnDialogs {
      * by hand, then reloads once they are all back. Until then the old drawing
      * keeps showing.
      */
-    void redrawStale() {
+    public void redrawStale() {
         CommandSender tell = notify != null ? notify : Bukkit.getConsoleSender();
         notify = null;
         Map<String, File> todo = new LinkedHashMap<>(stale);
@@ -557,7 +560,7 @@ final class DrawnDialogs {
         if (to instanceof Player p && p.isOnline()) Platform.send(p, Text.MM.deserialize("<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>" + mini));
     }
 
-    void shutdown() {
+    public void shutdown() {
         var map = Platform.commandMap();
         for (Command c : commands) OpenCommands.unregister(map, c);
         commands.clear();

@@ -1,7 +1,8 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.platform;
 
-import ai.resourcepack.dialogs.drawn.DialogPackets;
-import ai.resourcepack.dialogs.drawn.DialogSnbt;
+import ai.resourcepack.dialogs.core.drawn.DialogPackets;
+import ai.resourcepack.dialogs.core.drawn.DialogSnbt;
+import ai.resourcepack.dialogs.core.yaml.Renderer;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.bungeecord.BungeeComponentSerializer;
@@ -26,7 +27,7 @@ import java.util.logging.Logger;
  * <p>Text is Adventure throughout (shaded and relocated, so it is ours on both
  * servers) and leaves as BungeeCord chat, which both servers accept.
  */
-final class Platform {
+public final class Platform {
 
     private Platform() {}
 
@@ -35,7 +36,7 @@ final class Platform {
 
     // ------------------------------------------------------------------ chat
 
-    static void send(CommandSender to, Component message) {
+    public static void send(CommandSender to, Component message) {
         if (to instanceof Player p) {
             p.spigot().sendMessage(BungeeComponentSerializer.get().serialize(message));
         } else {
@@ -43,36 +44,36 @@ final class Platform {
         }
     }
 
-    static void broadcast(Component message) {
+    public static void broadcast(Component message) {
         for (Player p : Bukkit.getOnlinePlayers()) send(p, message);
         send(Bukkit.getConsoleSender(), message);
     }
 
-    static void actionBar(Player player, Component message) {
+    public static void actionBar(Player player, Component message) {
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR, BungeeComponentSerializer.get().serialize(message));
     }
 
-    static void title(Player player, Component title, Component subtitle) {
+    public static void title(Player player, Component title, Component subtitle) {
         player.sendTitle(LEGACY.serialize(title), LEGACY.serialize(subtitle), 10, 70, 20);
     }
 
     /** For a resource pack prompt and the like, which the Bukkit API takes as a legacy string. */
-    static String legacy(Component text) {
+    public static String legacy(Component text) {
         return LEGACY.serialize(text);
     }
 
-    static String plain(Component text) {
+    public static String plain(Component text) {
         return PlainTextComponentSerializer.plainText().serialize(text);
     }
 
-    static void sound(Player player, String key, float volume, float pitch) {
+    public static void sound(Player player, String key, float volume, float pitch) {
         player.playSound(player.getLocation(), key, SoundCategory.MASTER, volume, pitch);
     }
 
     // ------------------------------------------------------------------ server
 
     /** The server's command map. Paper has {@code Bukkit.getCommandMap()}; both servers have CraftServer's. */
-    static org.bukkit.command.CommandMap commandMap() {
+    public static org.bukkit.command.CommandMap commandMap() {
         try {
             return (org.bukkit.command.CommandMap) Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
         } catch (ReflectiveOperationException e) {
@@ -82,7 +83,7 @@ final class Platform {
 
     /** The command map's own table, which {@code Command.unregister} leaves its entries in. */
     @SuppressWarnings("unchecked")
-    static java.util.Map<String, org.bukkit.command.Command> knownCommands(org.bukkit.command.CommandMap map) {
+    public static java.util.Map<String, org.bukkit.command.Command> knownCommands(org.bukkit.command.CommandMap map) {
         try {
             return (java.util.Map<String, org.bukkit.command.Command>) map.getClass().getMethod("getKnownCommands").invoke(map);
         } catch (ReflectiveOperationException ignored) {
@@ -101,7 +102,7 @@ final class Platform {
     }
 
     /** "1.21.8", from "1.21.8-R0.1-SNAPSHOT" (getMinecraftVersion is Paper's alone). */
-    static String minecraftVersion() {
+    public static String minecraftVersion() {
         return Bukkit.getBukkitVersion().split("-")[0];
     }
 
@@ -119,7 +120,7 @@ final class Platform {
         }
     }
 
-    static String describe() {
+    public static String describe() {
         if (SPIGOT_DIALOGS) return "Spigot's dialog API";
         return "the server's dialog codec";
     }
@@ -129,7 +130,7 @@ final class Platform {
      * Spigot's dialog API on Spigot, the server's own codec on Paper, and the
      * vanilla {@code /dialog show} command when neither is there.
      */
-    static boolean showOwn(Player player, JsonObject dialog) {
+    public static boolean showOwn(Player player, JsonObject dialog) {
         if (SPIGOT_DIALOGS) {
             SpigotDialogs.show(player, dialog);
             return true;
@@ -143,7 +144,7 @@ final class Platform {
      * command, which carries it inline as SNBT. Returns false, having said why
      * in the log, when neither will take it.
      */
-    static boolean showJson(Player player, String json, Logger log) {
+    public static boolean showJson(Player player, String json, Logger log) {
         if (DialogPackets.show(player, json)) return true;
         Optional<String> inline = DialogSnbt.of(json);
         if (inline.isPresent()) {
@@ -171,7 +172,7 @@ final class Platform {
         return null;
     }
 
-    static void closeDialog(Player player) {
+    public static void closeDialog(Player player) {
         if (CLOSE != null) {
             try {
                 CLOSE.invoke(player);

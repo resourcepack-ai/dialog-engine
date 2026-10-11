@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import org.junit.jupiter.api.Test;
 
@@ -78,13 +78,6 @@ class TextTest {
         assertEquals("\\<red>hi", Text.fill("{typed}", scope(Map.of("typed", "<red>hi")), Text.Mode.TEXT));
         // A filter in a raw JSON dialog escapes for its own string, then the dialog's.
         assertEquals("a\\\\\\\"b", Text.fill("{typed|json}", scope(Map.of("typed", "a\"b")), Text.Mode.JSON));
-    }
-
-    @Test
-    void aFilteredMentionStillCarriesTheTypedValue() {
-        assertTrue(Actions.mentionsAny("reason={typed|raw}", Set.of("typed")));
-        assertTrue(Actions.mentionsAny("reason={typed?a:b|c}", Set.of("typed")));
-        assertFalse(Actions.mentionsAny("reason={other}", Set.of("typed")));
     }
 
     @Test

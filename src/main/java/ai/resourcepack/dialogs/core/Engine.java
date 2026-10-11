@@ -10,10 +10,26 @@ import ai.resourcepack.dialogs.api.event.DialogClickEvent;
 import ai.resourcepack.dialogs.api.event.DialogEngineReloadEvent;
 import ai.resourcepack.dialogs.api.event.DialogInputErrorEvent;
 import ai.resourcepack.dialogs.api.event.DialogOpenEvent;
-import ai.resourcepack.dialogs.core.Defs.ButtonDef;
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
-import ai.resourcepack.dialogs.core.Defs.InputDef;
-import ai.resourcepack.dialogs.core.Defs.InputKind;
+import ai.resourcepack.dialogs.core.click.Actions;
+import ai.resourcepack.dialogs.core.click.ClickCtx;
+import ai.resourcepack.dialogs.core.click.Clicks;
+import ai.resourcepack.dialogs.core.command.OpenCommands;
+import ai.resourcepack.dialogs.core.drawn.DrawnDialogs;
+import ai.resourcepack.dialogs.core.drawn.DrawnPack;
+import ai.resourcepack.dialogs.core.edit.EditSessions;
+import ai.resourcepack.dialogs.core.placeholder.BuiltInLists;
+import ai.resourcepack.dialogs.core.placeholder.Conditions;
+import ai.resourcepack.dialogs.core.placeholder.Papi;
+import ai.resourcepack.dialogs.core.placeholder.Scope;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs.ButtonDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.InputDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.InputKind;
+import ai.resourcepack.dialogs.core.yaml.Defs;
+import ai.resourcepack.dialogs.core.yaml.Loader;
+import ai.resourcepack.dialogs.core.yaml.Renderer;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
@@ -156,9 +172,9 @@ public final class Engine implements DialogEngineAPI {
     }
 
     /** Drawn dialogs: Studio's, run on RP Engine's dialog code (DrawnDialogs). */
-    final DrawnDialogs drawn = new DrawnDialogs(this);
+    public final DrawnDialogs drawn = new DrawnDialogs(this);
     /** The pack they are drawn with. */
-    final DrawnPack drawnPack = new DrawnPack(this);
+    public final DrawnPack drawnPack = new DrawnPack(this);
 
     /** {@code /dialogclick}: what a drawn dialog's clicks run. */
     public void drawnClick(Player player, String[] args) {
@@ -240,7 +256,7 @@ public final class Engine implements DialogEngineAPI {
         return plugin;
     }
 
-    Clicks clicks() {
+    public Clicks clicks() {
         return clicks;
     }
 
@@ -259,28 +275,28 @@ public final class Engine implements DialogEngineAPI {
         Platform.send(to, Text.MM.deserialize(miniMessage));
     }
 
-    Duration clickLifetime() {
+    public Duration clickLifetime() {
         return clickLifetime;
     }
 
-    String validationFormat() {
+    public String validationFormat() {
         return validationFormat;
     }
 
-    String message(String key, String fallback) {
+    public String message(String key, String fallback) {
         return plugin.getConfig().getString("messages." + key, fallback);
     }
 
-    void warnOnce(String message) {
+    public void warnOnce(String message) {
         if (warned.add(message)) plugin.getLogger().warning(message);
     }
 
-    DialogDef def(String id) {
+    public DialogDef def(String id) {
         return dialogs.get(id);
     }
 
     /** "confirm" inside namespace "myplugin" is "myplugin:confirm". */
-    String qualify(String id, String namespace) {
+    public String qualify(String id, String namespace) {
         String trimmed = id.trim().toLowerCase(Locale.ROOT);
         if (trimmed.contains(":") || namespace == null) return trimmed;
         return namespace + ":" + trimmed;
@@ -289,7 +305,7 @@ public final class Engine implements DialogEngineAPI {
     private EditSessions edits;
 
     /** {@code /de edit}'s sessions, made on first use. */
-    synchronized EditSessions edits() {
+    public synchronized EditSessions edits() {
         if (edits == null) edits = new EditSessions(this);
         return edits;
     }
@@ -314,7 +330,7 @@ public final class Engine implements DialogEngineAPI {
     }
 
     /** Closes the player's dialog, and with it every button it had. */
-    void closeDialog(Player player) {
+    public void closeDialog(Player player) {
         Platform.closeDialog(player);
         clicks.forget(player.getUniqueId());
         drawn.retire(player);
@@ -324,7 +340,7 @@ public final class Engine implements DialogEngineAPI {
      * Whether a click from this player may go ahead: at most
      * {@link #CLICKS_PER_SECOND} a second. The rest are dropped.
      */
-    boolean allowClick(Player player) {
+    public boolean allowClick(Player player) {
         long second = System.currentTimeMillis() / 1000;
         long[] rate = clickRate.compute(player.getUniqueId(), (k, r) -> {
             if (r == null || r[0] != second) return new long[] {second, 1};
@@ -335,7 +351,7 @@ public final class Engine implements DialogEngineAPI {
     }
 
     /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
-    void closeUnlessShown(Player player) {
+    public void closeUnlessShown(Player player) {
         long before = shown.getOrDefault(player.getUniqueId(), 0L);
         Runnable close = () -> {
             if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player);
@@ -347,7 +363,7 @@ public final class Engine implements DialogEngineAPI {
     // ------------------------------------------------------------------ showing
 
     /** Draws a session's dialog. The one place a dialog reaches a player. */
-    boolean show(Player player, Session session, boolean reopened) {
+    public boolean show(Player player, Session session, boolean reopened) {
         // A session is one player's: drawn for anybody else, its values would be theirs to act on.
         if (!player.getUniqueId().equals(session.viewer)) return false;
         if (drawn.has(session.dialogId)) {
@@ -416,7 +432,7 @@ public final class Engine implements DialogEngineAPI {
     }
 
     /** Opens a dialog the way a player asked for it: with the permission check, and with their words untrusted. */
-    boolean openAsPlayer(Player player, String id, Map<String, String> values, Set<String> untrusted, Session previous) {
+    public boolean openAsPlayer(Player player, String id, Map<String, String> values, Set<String> untrusted, Session previous) {
         DialogDef def = dialogs.get(id);
         if (def == null && drawn.has(id)) def = drawn.get(id).map(DrawnDialogs.Drawn::def).orElse(null);
         if (def == null) {
@@ -442,7 +458,7 @@ public final class Engine implements DialogEngineAPI {
      * {@code if:}) is asked again, because a button can be pressed up to
      * {@code click-lifetime-minutes} later and the answer may have changed.
      */
-    void onClick(Player player, long drawing, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
+    public void onClick(Player player, long drawing, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
                  List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, Clicks.Payload view) {
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(plugin, () -> onClick(player, drawing, def, button, session, alias, row, inputs, optionLabels, view));
@@ -555,7 +571,7 @@ public final class Engine implements DialogEngineAPI {
 
     // ------------------------------------------------------------------ lookups used while drawing
 
-    String resolvePlaceholder(Player viewer, DialogContext context, String key) {
+    public String resolvePlaceholder(Player viewer, DialogContext context, String key) {
         List<Owned<Map.Entry<String, PlaceholderResolver>>> snapshot;
         synchronized (resolvers) {
             snapshot = List.copyOf(resolvers);
@@ -574,7 +590,7 @@ public final class Engine implements DialogEngineAPI {
         return null;
     }
 
-    List<Map<String, String>> rows(String list, Scope scope) {
+    public List<Map<String, String>> rows(String list, Scope scope) {
         DialogDef def = dialogs.get(scope.dialogId);
         if (def != null && def.lists().containsKey(list)) return def.lists().get(list);
         Owned<ListProvider> provider = lists.get(list.toLowerCase(Locale.ROOT));
@@ -593,17 +609,17 @@ public final class Engine implements DialogEngineAPI {
         return List.of();
     }
 
-    ActionHandler customAction(String tag) {
+    public ActionHandler customAction(String tag) {
         Owned<ActionHandler> h = customActions.get(tag);
         return h == null ? null : h.value();
     }
 
     /** Runs an action list, as a button's. */
-    void run(ClickCtx ctx, List<String> list) {
+    public void run(ClickCtx ctx, List<String> list) {
         actions.run(ctx, list, 0);
     }
 
-    void remember(Player player, Session session) {
+    public void remember(Player player, Session session) {
         sessions.put(player.getUniqueId(), session);
     }
 
@@ -740,7 +756,7 @@ public final class Engine implements DialogEngineAPI {
         return commands;
     }
 
-    Map<String, DialogDef> all() {
+    public Map<String, DialogDef> all() {
         return dialogs;
     }
 }

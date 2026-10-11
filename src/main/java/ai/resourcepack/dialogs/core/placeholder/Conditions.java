@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,11 +18,11 @@ import java.util.Locale;
  * Operands are split BEFORE placeholders are filled, so a value with spaces in
  * it is still one operand.
  */
-final class Conditions {
+public final class Conditions {
 
     private Conditions() {}
 
-    static boolean test(String expression, Scope scope) {
+    public static boolean test(String expression, Scope scope) {
         if (expression == null || expression.isBlank()) return true;
         try {
             Parser p = new Parser(tokenize(expression), scope);
@@ -135,7 +135,7 @@ final class Conditions {
         }
     }
 
-    static boolean truthy(String v) {
+    public static boolean truthy(String v) {
         if (v == null) return false;
         String s = v.trim().toLowerCase(Locale.ROOT);
         if (s.isEmpty() || s.equals("false") || s.equals("0") || s.equals("no") || s.equals("off") || s.equals("null")) return false;

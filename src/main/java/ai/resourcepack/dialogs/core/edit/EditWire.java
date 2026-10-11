@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.edit;
 
 import java.util.Map;
 
@@ -10,61 +10,61 @@ import java.util.Map;
  * as JSON. Studio reads and writes these field names exactly, so renaming one
  * here breaks {@code /de edit} until Studio is changed to match.
  */
-final class EditWire {
+public final class EditWire {
 
     private EditWire() {
     }
 
     /** What opens a session. */
-    static final class Open {
-        String client;
-        String kind;
-        String label;
-        String minecraftVersion;
-        Dialog dialog;
+    public static final class Open {
+        public String client;
+        public String kind;
+        public String label;
+        public String minecraftVersion;
+        public Dialog dialog;
     }
 
     /** A drawn dialog: where it is kept, its name, Studio's spec, and (on a pull) every page as built. */
-    static final class Dialog {
+    public static final class Dialog {
         /** Relative to the plugin's folder: {@code drawn/server/shop}. */
-        String path;
-        String key;
-        Map<String, Object> spec;
-        java.util.List<Map<String, Object>> built;
+        public String path;
+        public String key;
+        public Map<String, Object> spec;
+        public java.util.List<Map<String, Object>> built;
     }
 
     /** One file of the pack that draws it. */
-    static final class File {
-        String path;
-        String encoding;
-        String content;
+    public static final class File {
+        public String path;
+        public String encoding;
+        public String content;
     }
 
     /** The answer to opening one. */
-    static final class Opened {
-        String id;
-        String url;
-        String pullToken;
-        String expiresAt;
-        long revision;
+    public static final class Opened {
+        public String id;
+        public String url;
+        public String pullToken;
+        public String expiresAt;
+        public long revision;
     }
 
     /** What polling answers. */
-    static final class Status {
-        String id;
-        String kind;
-        String label;
-        long revision;
-        String expiresAt;
-        boolean opened;
+    public static final class Status {
+        public String id;
+        public String kind;
+        public String label;
+        public long revision;
+        public String expiresAt;
+        public boolean opened;
     }
 
     /** What a pull answers: the dialog as it was sent from the editor. */
-    static final class Pull {
-        String id;
-        String kind;
-        long revision;
-        java.util.List<File> files;
-        Dialog dialog;
+    public static final class Pull {
+        public String id;
+        public String kind;
+        public long revision;
+        public java.util.List<File> files;
+        public Dialog dialog;
     }
 }

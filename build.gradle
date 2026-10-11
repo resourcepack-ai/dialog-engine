@@ -123,17 +123,22 @@ tasks.register('copyEngineDialogs', Copy) {
     from(engineDialogs) {
         include sharedDialogs.collect { "${it}.java" }
     }
-    into generatedDialogs.map { it.dir('ai/resourcepack/dialogs/drawn') }
+    into generatedDialogs.map { it.dir('ai/resourcepack/dialogs/core/drawn') }
     filter { String line ->
         if (line.startsWith('import ai.resourcepack.engine.')) return ''
-        line.replace('package ai.resourcepack.engine.core.dialog;', 'package ai.resourcepack.dialogs.drawn;')
+        line.replace('package ai.resourcepack.engine.core.dialog;', 'package ai.resourcepack.dialogs.core.drawn;')
             .replace('McVersion.parse(Compatibility.readServerVersion()).map(Feature.TEXT_OBJECTS::on).orElse(false)', 'Heads.supported()')
             .replace('{@link Feature#TEXT_OBJECTS}', 'the 1.21.9 player text component')
             .replace('Logger.getLogger("RPEngine")', 'Logger.getLogger("DialogEngine")')
             .replace('"[RPEngine] ', '"[DialogEngine] ')
     }
+    // Emptied first, so a copy left by an earlier layout (another package
+    // directory) is never compiled beside this one.
+    doFirst {
+        delete(generatedDialogs)
+    }
     doLast {
-        def text = file("${generatedDialogs.get().asFile}/ai/resourcepack/dialogs/drawn/DialogPlaceholders.java").text
+        def text = file("${generatedDialogs.get().asFile}/ai/resourcepack/dialogs/core/drawn/DialogPlaceholders.java").text
         if (text.contains('McVersion') || text.contains('Compatibility')) {
             throw new GradleException('RP Engine\'s DialogPlaceholders changed how it asks the server version; update copyEngineDialogs.')
         }

@@ -1,6 +1,8 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.command;
 
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
@@ -22,18 +24,18 @@ import java.util.Set;
  * into the server's command map so they can come and go on reload. A name
  * another plugin already has is left to that plugin, and the console says so.
  */
-final class OpenCommands {
+public final class OpenCommands {
 
     private final Engine engine;
     private final JavaPlugin plugin;
     private final Map<String, DialogCommand> registered = new LinkedHashMap<>();
 
-    OpenCommands(Engine engine, JavaPlugin plugin) {
+    public OpenCommands(Engine engine, JavaPlugin plugin) {
         this.engine = engine;
         this.plugin = plugin;
     }
 
-    void sync(Collection<DialogDef> defs) {
+    public void sync(Collection<DialogDef> defs) {
         clear();
         CommandMap map = Platform.commandMap();
         Set<String> taken = new HashSet<>();
@@ -61,7 +63,7 @@ final class OpenCommands {
         refreshClients();
     }
 
-    void clear() {
+    public void clear() {
         if (registered.isEmpty()) return;
         CommandMap map = Platform.commandMap();
         for (DialogCommand cmd : registered.values()) unregister(map, cmd);
@@ -74,7 +76,7 @@ final class OpenCommands {
      * alone leaves it in the known commands, under its name and its
      * {@code dialogengine:} one, so it keeps running until a restart.
      */
-    static void unregister(CommandMap map, Command cmd) {
+    public static void unregister(CommandMap map, Command cmd) {
         cmd.unregister(map);
         Platform.knownCommands(map).values().removeIf(c -> c == cmd);
     }

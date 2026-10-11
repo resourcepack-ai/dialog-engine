@@ -1,8 +1,8 @@
 package ai.resourcepack.dialogs;
 
 import ai.resourcepack.dialogs.api.DialogEngine;
-import ai.resourcepack.dialogs.core.AdminCommand;
 import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.command.AdminCommand;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;

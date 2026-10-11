@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.click;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -32,15 +32,15 @@ import java.util.function.BiConsumer;
  * payload) and Paper's {@code io.papermc.paper.event.player.PlayerCustomClickEvent}
  * (a response view). Each is listened to by reflection, whichever exists.
  */
-final class Clicks {
+public final class Clicks {
 
     /** The custom click id every Dialog Engine button sends. */
     static final String ID = "dialogengine:click";
     /** Where the token rides in the payload, beside the inputs. Loader keeps inputs off this key. */
-    static final String TOKEN = "dialogengine_click";
+    public static final String TOKEN = "dialogengine_click";
 
     /** What came back with a click: the dialog's inputs, by key. */
-    interface Payload {
+    public interface Payload {
         String text(String key);
 
         Boolean bool(String key);
@@ -54,7 +54,7 @@ final class Clicks {
     private final SecureRandom random = new SecureRandom();
 
     /** A token for one button of drawing {@code drawing}; the action is handed the player who clicked. */
-    String bind(Player player, Duration lifetime, long drawing, BiConsumer<Player, Payload> action) {
+    public String bind(Player player, Duration lifetime, long drawing, BiConsumer<Player, Payload> action) {
         if (bound.size() > 2048) purge();
         byte[] bytes = new byte[12];
         random.nextBytes(bytes);
@@ -64,12 +64,12 @@ final class Clicks {
     }
 
     /** Drops every token of the player's except drawing {@code keep}'s: a new screen replaced the old one. */
-    void retire(UUID player, long keep) {
+    public void retire(UUID player, long keep) {
         bound.values().removeIf(b -> b.player.equals(player) && b.drawing != keep);
     }
 
     /** The action JSON a button carries. */
-    static JsonObject action(String token) {
+    public static JsonObject action(String token) {
         JsonObject additions = new JsonObject();
         additions.addProperty(TOKEN, token);
         JsonObject action = new JsonObject();
@@ -79,11 +79,11 @@ final class Clicks {
         return action;
     }
 
-    void forget(UUID player) {
+    public void forget(UUID player) {
         bound.values().removeIf(b -> b.player.equals(player));
     }
 
-    void clear() {
+    public void clear() {
         bound.clear();
     }
 
@@ -108,7 +108,7 @@ final class Clicks {
     // ------------------------------------------------------------------ listening
 
     /** Listens to whichever custom click event this server raises. Returns its name, or null for none. */
-    String listen(Plugin plugin) {
+    public String listen(Plugin plugin) {
         Listener holder = new Listener() {};
         Class<? extends Event> paper = eventClass("io.papermc.paper.event.player.PlayerCustomClickEvent");
         if (paper != null) {

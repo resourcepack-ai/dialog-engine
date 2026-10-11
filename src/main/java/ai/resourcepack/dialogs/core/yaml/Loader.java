@@ -1,14 +1,15 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.yaml;
 
-import ai.resourcepack.dialogs.core.Defs.BodyDef;
-import ai.resourcepack.dialogs.core.Defs.BodyKind;
-import ai.resourcepack.dialogs.core.Defs.ButtonDef;
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
-import ai.resourcepack.dialogs.core.Defs.ForEach;
-import ai.resourcepack.dialogs.core.Defs.InputDef;
-import ai.resourcepack.dialogs.core.Defs.InputKind;
-import ai.resourcepack.dialogs.core.Defs.OptionDef;
-import ai.resourcepack.dialogs.core.Defs.Type;
+import ai.resourcepack.dialogs.core.click.Clicks;
+import ai.resourcepack.dialogs.core.yaml.Defs.BodyDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.BodyKind;
+import ai.resourcepack.dialogs.core.yaml.Defs.ButtonDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.ForEach;
+import ai.resourcepack.dialogs.core.yaml.Defs.InputDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.InputKind;
+import ai.resourcepack.dialogs.core.yaml.Defs.OptionDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.Type;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -27,20 +28,20 @@ import java.util.regex.Pattern;
  * where it cannot: each problem is a line in {@link #problems}, which
  * {@code /de reload} prints.
  */
-final class Loader {
+public final class Loader {
 
     static final Pattern NAME = Pattern.compile("[a-z0-9_.\\-/]+");
     static final Pattern COMMAND = Pattern.compile("[a-z0-9_\\-]{1,32}");
 
-    final List<String> problems = new ArrayList<>();
+    public final List<String> problems = new ArrayList<>();
     private final Defs.After defaultAfter;
 
-    Loader(Defs.After defaultAfter) {
+    public Loader(Defs.After defaultAfter) {
         this.defaultAfter = defaultAfter;
     }
 
     /** Every .yml under a folder, recursively, as dialogs in {@code namespace}. */
-    Map<String, DialogDef> loadFolder(String namespace, File folder) {
+    public Map<String, DialogDef> loadFolder(String namespace, File folder) {
         Map<String, DialogDef> out = new LinkedHashMap<>();
         if (!folder.isDirectory()) return out;
         walk(namespace, folder, folder, out);
@@ -76,7 +77,7 @@ final class Loader {
         }
     }
 
-    DialogDef parse(String id, String namespace, String source, ConfigurationSection s, File baseDir) {
+    public DialogDef parse(String id, String namespace, String source, ConfigurationSection s, File baseDir) {
         String name = id.substring(id.indexOf(':') + 1);
         if (!NAME.matcher(name).matches()) {
             problems.add(source + ": '" + name + "' is not a usable dialog name (a-z, 0-9, _ . - only)");

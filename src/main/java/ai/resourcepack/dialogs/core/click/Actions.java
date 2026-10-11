@@ -1,6 +1,11 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.click;
 
 import ai.resourcepack.dialogs.api.ActionHandler;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.placeholder.Conditions;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import org.bukkit.Bukkit;
@@ -25,14 +30,14 @@ import java.util.logging.Level;
  * One that does not is refused before anything runs, and a command that
  * fails stops the actions after it.
  */
-final class Actions {
+public final class Actions {
 
     private static final Set<String> TEXT_TAGS = Set.of("message", "broadcast", "actionbar", "title");
     private static final Set<String> COMMAND_TAGS = Set.of("player", "command", "cmd", "console");
 
     private final Engine engine;
 
-    Actions(Engine engine) {
+    public Actions(Engine engine) {
         this.engine = engine;
     }
 
@@ -50,7 +55,7 @@ final class Actions {
         }
     }
 
-    void run(ClickCtx ctx, List<String> actions, int from) {
+    public void run(ClickCtx ctx, List<String> actions, int from) {
         if (from == 0 && !commandsSafe(ctx, actions)) {
             ctx.finish();
             return;

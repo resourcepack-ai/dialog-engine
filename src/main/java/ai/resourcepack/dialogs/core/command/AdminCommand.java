@@ -1,6 +1,11 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.command;
 
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.Session;
+import ai.resourcepack.dialogs.core.drawn.DrawnDialogs;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;

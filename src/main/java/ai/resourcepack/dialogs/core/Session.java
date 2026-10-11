@@ -14,18 +14,18 @@ import java.util.UUID;
  * click always acts on the values that player saw, never on whatever another
  * dialog has done to the player since.
  */
-final class Session {
+public final class Session {
 
     private static final int MAX_BACK = 16;
 
     final UUID viewer;
-    final String dialogId;
-    final LinkedHashMap<String, String> values;
+    public final String dialogId;
+    public final LinkedHashMap<String, String> values;
     /** Keys whose values a player typed: escaped where printed, flattened to one line in commands. */
-    final Set<String> untrusted;
-    final Session previous;
+    public final Set<String> untrusted;
+    public final Session previous;
 
-    Session(UUID viewer, String dialogId, Map<String, String> values, Set<String> untrusted, Session previous) {
+    public Session(UUID viewer, String dialogId, Map<String, String> values, Set<String> untrusted, Session previous) {
         this.viewer = viewer;
         this.dialogId = dialogId;
         this.values = new LinkedHashMap<>(values);
@@ -34,7 +34,7 @@ final class Session {
     }
 
     /** The same dialog with different values (refresh, page, failed check). */
-    Session with(Map<String, String> newValues, Set<String> newUntrusted) {
+    public Session with(Map<String, String> newValues, Set<String> newUntrusted) {
         return new Session(viewer, dialogId, newValues, newUntrusted, previous);
     }
 

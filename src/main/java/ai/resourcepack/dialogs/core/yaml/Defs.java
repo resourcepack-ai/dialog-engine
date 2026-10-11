@@ -1,18 +1,18 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.yaml;
 
 
 import java.util.List;
 import java.util.Map;
 
 /** A dialog as written, before any placeholder is filled. Immutable; rebuilt on reload. */
-final class Defs {
+public final class Defs {
 
     private Defs() {}
 
-    enum Type { AUTO, NOTICE, CONFIRMATION, MULTI_ACTION, LINKS }
+    public enum Type { AUTO, NOTICE, CONFIRMATION, MULTI_ACTION, LINKS }
 
     /** What the screen does once a button is pressed: the game's {@code after_action}. */
-    enum After {
+    public enum After {
         CLOSE, NONE, WAIT_FOR_RESPONSE;
 
         String json() {
@@ -22,7 +22,7 @@ final class Defs {
 
     record ForEach(String list, String alias, int perPage, int limit) {}
 
-    record DialogDef(
+    public record DialogDef(
             String id,
             String namespace,
             String source,
@@ -69,11 +69,11 @@ final class Defs {
             ForEach forEach) {
     }
 
-    enum InputKind { TEXT, OPTIONS, TOGGLE, SLIDER }
+    public enum InputKind { TEXT, OPTIONS, TOGGLE, SLIDER }
 
     record OptionDef(String id, String text, String initial) {}
 
-    record InputDef(
+    public record InputDef(
             String key,
             InputKind kind,
             String label,
@@ -99,7 +99,7 @@ final class Defs {
             String condition) {
     }
 
-    record ButtonDef(
+    public record ButtonDef(
             String id,
             String label,
             String tooltip,

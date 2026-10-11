@@ -1,13 +1,20 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.yaml;
 
-import ai.resourcepack.dialogs.core.Defs.BodyDef;
-import ai.resourcepack.dialogs.core.Defs.BodyKind;
-import ai.resourcepack.dialogs.core.Defs.ButtonDef;
-import ai.resourcepack.dialogs.core.Defs.DialogDef;
-import ai.resourcepack.dialogs.core.Defs.ForEach;
-import ai.resourcepack.dialogs.core.Defs.InputDef;
-import ai.resourcepack.dialogs.core.Defs.OptionDef;
-import ai.resourcepack.dialogs.core.Defs.Type;
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.Session;
+import ai.resourcepack.dialogs.core.click.Clicks;
+import ai.resourcepack.dialogs.core.placeholder.Conditions;
+import ai.resourcepack.dialogs.core.placeholder.Scope;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
+import ai.resourcepack.dialogs.core.yaml.Defs.BodyDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.BodyKind;
+import ai.resourcepack.dialogs.core.yaml.Defs.ButtonDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.ForEach;
+import ai.resourcepack.dialogs.core.yaml.Defs.InputDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.OptionDef;
+import ai.resourcepack.dialogs.core.yaml.Defs.Type;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,19 +47,19 @@ import java.util.UUID;
  * <p>What comes out is the game's own dialog JSON, the same on every server;
  * {@link Platform} decides how it reaches the screen.
  */
-final class Renderer {
+public final class Renderer {
 
     private final Engine engine;
 
-    Renderer(Engine engine) {
+    public Renderer(Engine engine) {
         this.engine = engine;
     }
 
     /** What one drawing produced: the dialog, and the inputs on it (so a click knows what to read). */
-    record Drawn(JsonObject dialog, List<InputDef> inputs, Map<String, Map<String, String>> optionLabels) {}
+    public record Drawn(JsonObject dialog, List<InputDef> inputs, Map<String, Map<String, String>> optionLabels) {}
 
     /** Draws it as drawing number {@code drawing} of the viewer's (see {@link Engine#onClick}). */
-    Drawn draw(DialogDef def, Session session, Player viewer, long drawing) {
+    public Drawn draw(DialogDef def, Session session, Player viewer, long drawing) {
         Scope scope = new Scope(engine, viewer, def.id(), session.values, session.untrusted, null, null);
         Map<String, List<Map<String, String>>> lists = new HashMap<>();
         paging(def, scope, session, lists);

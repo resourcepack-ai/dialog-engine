@@ -1,5 +1,6 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.platform;
 
+import ai.resourcepack.dialogs.core.yaml.Renderer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

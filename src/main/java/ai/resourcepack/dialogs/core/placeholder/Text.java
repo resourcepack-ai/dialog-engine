@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import com.google.gson.JsonElement;
 import net.kyori.adventure.text.Component;
@@ -26,11 +26,11 @@ import java.util.regex.Pattern;
  * {@code {key|json}} and {@code {key|snbt}} escaped for the inside of a quoted
  * JSON or SNBT string. A filter works on any value, typed or not.
  */
-final class Text {
+public final class Text {
 
-    static final MiniMessage MM = MiniMessage.miniMessage();
+    public static final MiniMessage MM = MiniMessage.miniMessage();
 
-    enum Mode {
+    public enum Mode {
         /** For MiniMessage: player-typed values are escaped. */
         TEXT,
         /** For action arguments: player-typed values are flattened to one line. */
@@ -48,8 +48,8 @@ final class Text {
      * A {@link Mode#COMMAND} fill met a value a player typed that a command
      * may not carry as it is. {@code key} is the placeholder that held it.
      */
-    static final class Unsafe extends RuntimeException {
-        final String key;
+    public static final class Unsafe extends RuntimeException {
+        public final String key;
 
         Unsafe(String key) {
             super("{" + key + "} holds typed text a command may not carry", null, false, false);
@@ -59,21 +59,21 @@ final class Text {
 
     private Text() {}
 
-    static Component component(String raw, Scope scope) {
+    public static Component component(String raw, Scope scope) {
         if (raw == null || raw.isEmpty()) return Component.empty();
         return MM.deserialize(fill(raw, scope, Mode.TEXT));
     }
 
     /** MiniMessage, filled, as the game's JSON text component (what a dialog JSON holds). */
-    static JsonElement json(String raw, Scope scope) {
+    public static JsonElement json(String raw, Scope scope) {
         return json(component(raw, scope));
     }
 
-    static JsonElement json(Component component) {
+    public static JsonElement json(Component component) {
         return GsonComponentSerializer.gson().serializeToTree(component);
     }
 
-    static String fill(String raw, Scope scope, Mode mode) {
+    public static String fill(String raw, Scope scope, Mode mode) {
         if (raw == null) return "";
         // Not in a raw JSON dialog: a PlaceholderAPI value there could break the JSON it lands in.
         if (mode == Mode.JSON || !Papi.available()) return fillBraces(raw, scope, mode, null);
@@ -269,7 +269,7 @@ final class Text {
     }
 
     /** "1.0" → "1", "2.50" → "2.5": how a slider's number reads in a command. */
-    static String number(float f) {
+    public static String number(float f) {
         if (f == Math.rint(f) && Math.abs(f) < 1e9) return String.valueOf((long) f);
         String s = String.valueOf(f);
         return s.contains("E") ? java.math.BigDecimal.valueOf(f).stripTrailingZeros().toPlainString() : s;

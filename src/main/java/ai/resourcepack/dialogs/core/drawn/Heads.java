@@ -1,8 +1,12 @@
-package ai.resourcepack.dialogs.drawn;
+package ai.resourcepack.dialogs.core.drawn;
 
 import org.bukkit.Bukkit;
 
-/** Whether this server's dialogs may carry the {@code player} text component (1.21.9+). */
+/**
+ * Whether this server's dialogs may carry the {@code player} text component
+ * (1.21.9+). The build puts this in for RP Engine's own version check when it
+ * copies RP Engine's dialog code into this package.
+ */
 final class Heads {
 
     private Heads() {

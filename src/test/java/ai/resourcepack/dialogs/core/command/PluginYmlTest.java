@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.command;
 
 import org.junit.jupiter.api.Test;
 

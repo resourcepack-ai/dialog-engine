@@ -1,4 +1,4 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.placeholder;
 
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -7,7 +7,7 @@ import org.bukkit.entity.Player;
 import java.lang.reflect.Method;
 
 /** PlaceholderAPI's {@code %placeholders%}, when it is installed. By reflection, so it is never a dependency. */
-final class Papi {
+public final class Papi {
 
     private static Method set;
     private static boolean probed;
@@ -29,7 +29,7 @@ final class Papi {
         return method() != null;
     }
 
-    static void reset() {
+    public static void reset() {
         probed = false;
         set = null;
     }

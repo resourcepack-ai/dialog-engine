@@ -1,5 +1,8 @@
-package ai.resourcepack.dialogs.core;
+package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogs.core.Engine;
+import ai.resourcepack.dialogs.core.placeholder.Text;
+import ai.resourcepack.dialogs.core.platform.Platform;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -44,7 +47,7 @@ import java.util.zip.ZipOutputStream;
  * built when there is a drawn dialog at all: a server that never uses
  * {@code /de edit} is never asked to download anything.
  */
-final class DrawnPack {
+public final class DrawnPack {
 
     /** The namespace the sample drawn dialogs are written into. */
     static final String SAMPLES = "samples";
@@ -62,7 +65,7 @@ final class DrawnPack {
     /** Players sent the pack since they joined, whatever they made of it so far. */
     private final java.util.Set<UUID> offered = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    DrawnPack(Engine engine) {
+    public DrawnPack(Engine engine) {
         this.engine = engine;
     }
 
@@ -72,7 +75,7 @@ final class DrawnPack {
     }
 
     /** Builds the zip from every drawn dialog's {@code pack/} folder. Null when there is nothing to draw. */
-    void build(File drawnRoot) {
+    public void build(File drawnRoot) {
         Map<String, byte[]> files = new TreeMap<>();
         JsonArray overlays = new JsonArray();
         int format = 0;
@@ -202,12 +205,12 @@ final class DrawnPack {
         return e.isJsonArray() ? e.getAsJsonArray().get(0).getAsInt() : e.getAsInt();
     }
 
-    boolean present() {
+    public boolean present() {
         return zip != null;
     }
 
     /** Writes the zip to {@code drawn-pack.zip}, for a server that merges it into its own pack. */
-    File export() throws IOException {
+    public File export() throws IOException {
         File out = new File(engine.plugin().getDataFolder(), "drawn-pack.zip");
         Files.write(out.toPath(), zip);
         return out;
@@ -355,7 +358,7 @@ final class DrawnPack {
     }
 
     /** Where players download it from. */
-    String url() {
+    public String url() {
         String configured = cfg().getString("url", "");
         if (!configured.isBlank()) return configured;
         String host = cfg().getString("public-host", "");
@@ -369,25 +372,25 @@ final class DrawnPack {
      * every player to download a pack, and a sample's pack is sent when one is
      * opened ({@link #needs}).
      */
-    boolean onJoin() {
+    public boolean onJoin() {
         return ownDialogs;
     }
 
     /** Whether showing a player a drawn dialog has to wait for the pack to reach them first. */
-    boolean needs(Player player) {
+    public boolean needs(Player player) {
         return zip != null && cfg().getBoolean("send", true) && !offered.contains(player.getUniqueId());
     }
 
     /** The player declined it or could not load it: the next drawn dialog they open offers it again. */
-    void refused(Player player) {
+    public void refused(Player player) {
         offered.remove(player.getUniqueId());
     }
 
-    void forget(Player player) {
+    public void forget(Player player) {
         offered.remove(player.getUniqueId());
     }
 
-    static boolean isPack(UUID id) {
+    public static boolean isPack(UUID id) {
         return PACK_ID.equals(id);
     }
 
@@ -396,7 +399,7 @@ final class DrawnPack {
      * when it was not sent: there is none, sending is off, or this server was
      * to serve it and could not (the console has said why).
      */
-    boolean send(Player player) {
+    public boolean send(Player player) {
         if (zip == null || !cfg().getBoolean("send", true)) return false;
         serve();
         if (hosting() && server == null) return false;
@@ -414,11 +417,11 @@ final class DrawnPack {
     }
 
     /** After a rebuild: everybody, or (samples only) whoever has it already. */
-    void sendAll() {
+    public void sendAll() {
         for (Player p : Bukkit.getOnlinePlayers()) if (ownDialogs || offered.contains(p.getUniqueId())) send(p);
     }
 
-    synchronized void stop() {
+    public synchronized void stop() {
         if (server != null) server.close();
         server = null;
         servedPort = -1;
