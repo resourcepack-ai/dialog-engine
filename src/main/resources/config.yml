@@ -30,6 +30,8 @@ click-lifetime-minutes: 30
 # say (after: in its definition):
 #   wait  - stays up with "waiting for the server" until the engine answers.
 #           No flicker between one dialog and the next. (Recommended)
+#           A dialog with a [url], [copy] or [suggest] button is shown as
+#           close, since the server never hears those being pressed.
 #   close - closes at once, then the next dialog (if any) opens.
 #   none  - stays exactly as it is.
 default-after: wait

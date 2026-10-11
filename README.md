@@ -200,7 +200,7 @@ Run in order. A line without a `[tag]` is a command the player runs.
 | `[delay] ticks` | Wait before the rest |
 | `[if] condition` | Stop here unless it holds |
 | `[permission] node` | Stop here unless the player has it |
-| `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box) |
+| `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box). The server never hears that such a button was pressed, so a dialog with one is shown as `after: close` even under `wait` |
 | `[myplugin:tag] ...` | Whatever another plugin registered |
 
 **What a player typed, in a command.** A `[console]` or `[player]` command
@@ -390,7 +390,11 @@ runs a command that is in its `dialog.yml`.
 
 Under `after: wait` (the default) the client shows a waiting screen until the
 engine answers, so one dialog replaces another with no flash of the world in
-between.
+between. The engine always answers: with the next dialog, or by closing the
+screen `close-delay-ticks` after the button's actions have run. A button the
+client handles by itself (`[url]`, `[copy]`, `[suggest]`) never reaches the
+engine, so a dialog with one is shown as `after: close` instead. A drawn
+dialog set to wait in Studio is answered the same way.
 
 ## Building
 

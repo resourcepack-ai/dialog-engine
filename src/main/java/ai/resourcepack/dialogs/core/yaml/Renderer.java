@@ -110,8 +110,22 @@ public final class Renderer {
         if (!inputs.isEmpty()) dialog.add("inputs", inputs);
         dialog.addProperty("can_close_with_escape", def.escape());
         dialog.addProperty("pause", def.pause());
-        dialog.addProperty("after_action", def.after().json());
+        // A link, copy or suggest button is the client's own: the server never
+        // hears it was pressed, so under "wait" the client would show "Waiting
+        // for Server" until the player gave up. A dialog with one closes instead.
+        Defs.After after = def.after();
+        if (after == Defs.After.WAIT_FOR_RESPONSE
+                && (buttons.stream().anyMatch(Renderer::clientOnly) || (exit != null && clientOnly(exit)))) {
+            after = Defs.After.CLOSE;
+        }
+        dialog.addProperty("after_action", after.json());
         return new Drawn(dialog, drawnInputs, optionLabels);
+    }
+
+    /** Whether pressing this button is something only the client does (see {@link #staticAction}). */
+    private static boolean clientOnly(JsonObject button) {
+        return button.get("action") instanceof JsonObject action
+                && !"minecraft:dynamic/custom".equals(action.get("type").getAsString());
     }
 
     private static void type(JsonObject out, DialogDef def, List<JsonObject> buttons, JsonObject exit) {

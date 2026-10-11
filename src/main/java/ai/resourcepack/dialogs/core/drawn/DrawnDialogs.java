@@ -81,11 +81,13 @@ public final class DrawnDialogs {
 
     /**
      * One drawn dialog: its pages by Studio's id for each, the first first, the
-     * action lists its clicks run, and which pages stay up when clicked
-     * ({@code after_action: none}).
+     * action lists its clicks run, which pages stay up when clicked
+     * ({@code after_action: none}), and which wait for the server to answer
+     * ({@code after_action: wait_for_response}).
      */
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
-                 String command, String permission, List<List<String>> actions, Set<String> staysUp, DialogDef def) {}
+                 String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
+                 DialogDef def) {}
 
     /**
      * The drawing a player was last shown. {@code nonce} is what its action
@@ -175,6 +177,7 @@ public final class DrawnDialogs {
         Map<String, String> pages = new LinkedHashMap<>();
         Map<String, Set<String>> vars = new LinkedHashMap<>();
         Set<String> staysUp = new LinkedHashSet<>();
+        Set<String> waits = new LinkedHashSet<>();
         List<List<String>> actions = new ArrayList<>();
         List<String> refused = new ArrayList<>();
         String first = null;
@@ -183,9 +186,9 @@ public final class DrawnDialogs {
             String studioId = "studio:" + page.get("id").getAsString();
             if (first == null) first = studioId;
             JsonElement json = page.get("json");
-            if (json instanceof JsonObject o && o.get("after_action") instanceof JsonElement a && a.isJsonPrimitive()
-                    && "none".equals(a.getAsString())) {
-                staysUp.add(studioId);
+            if (json instanceof JsonObject o && o.get("after_action") instanceof JsonElement a && a.isJsonPrimitive()) {
+                if ("none".equals(a.getAsString())) staysUp.add(studioId);
+                else if ("wait_for_response".equals(a.getAsString())) waits.add(studioId);
             }
             JsonElement rewritten = rewrite(json, actions, allowed, refused);
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
@@ -212,7 +215,8 @@ public final class DrawnDialogs {
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
                 Map.of(), command, List.of(), permission, List.of(), null, null, Map.of());
-        return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp), def);
+        return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
+                Set.copyOf(waits), def);
     }
 
     /**
@@ -389,12 +393,12 @@ public final class DrawnDialogs {
         }
         if (d == null || !(holds(json, command) || holds(seen, command))) return;
         if (System.currentTimeMillis() - shown.at > engine.clickLifetime().toMillis()) {
-            retire(player);
+            refuse(player, d, shown);
             return;
         }
         if (shown.permitted && d.permission != null && !player.hasPermission(d.permission)) {
             Platform.send(player, Text.MM.deserialize(engine.message("no-permission", "<red>You can't do that.")));
-            retire(player);
+            refuse(player, d, shown);
             return;
         }
         if (act) {
@@ -433,11 +437,27 @@ public final class DrawnDialogs {
                 if (ctx.responded || !player.isOnline() || lastShown.get(uuid) == null || lastShown.get(uuid).nonce != null) return;
                 // The nonce is spent. A page that stays up when clicked is drawn
                 // again with a fresh one, so its next click works; any other
-                // page closed itself on the click, and its drawing is over.
-                if (d.staysUp.contains(shown.page)) showPage(player, d, shown.page, shown.session);
-                else retire(player);
+                // page's drawing is over. One that closes itself on the click
+                // has gone already, but one that waits is showing "Waiting for
+                // Server" until something answers, and nothing else will.
+                if (d.staysUp.contains(shown.page)) {
+                    showPage(player, d, shown.page, shown.session);
+                } else {
+                    retire(player);
+                    if (d.waits.contains(shown.page)) engine.closeUnlessShown(player);
+                }
             });
         }
+    }
+
+    /**
+     * A click that cannot go ahead ends the drawing. On a page that waits for
+     * the server it closes it too, or the player is left on the client's
+     * waiting screen.
+     */
+    private void refuse(Player player, Drawn d, Shown shown) {
+        if (d.waits.contains(shown.page)) engine.closeDialog(player);
+        else retire(player);
     }
 
     /**

@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.click;
 
+import ai.resourcepack.dialogs.core.platform.Platform;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -18,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.logging.Level;
 
 /**
  * Every button that calls back. A drawn button carries a {@code dynamic/custom}
@@ -52,6 +54,8 @@ public final class Clicks {
 
     private final Map<String, Bound> bound = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
+    private Plugin plugin;
+    private boolean unreadable;
 
     /** A token for one button of drawing {@code drawing}; the action is handed the player who clicked. */
     public String bind(Player player, Duration lifetime, long drawing, BiConsumer<Player, Payload> action) {
@@ -102,13 +106,22 @@ public final class Clicks {
             bound.remove(token);
             return;
         }
-        b.action.accept(player, payload);
+        try {
+            b.action.accept(player, payload);
+        } catch (RuntimeException e) {
+            // Said out loud and answered: under "wait" the player is looking at
+            // "Waiting for Server", and nothing else is going to take it away.
+            plugin.getLogger().log(Level.WARNING, "A button press by " + player.getName() + " failed", e);
+            forget(player.getUniqueId());
+            Platform.closeDialog(player);
+        }
     }
 
     // ------------------------------------------------------------------ listening
 
     /** Listens to whichever custom click event this server raises. Returns its name, or null for none. */
     public String listen(Plugin plugin) {
+        this.plugin = plugin;
         Listener holder = new Listener() {};
         Class<? extends Event> paper = eventClass("io.papermc.paper.event.player.PlayerCustomClickEvent");
         if (paper != null) {
@@ -142,7 +155,7 @@ public final class Clicks {
             if (id == null || !(data instanceof JsonObject json)) return;
             handle(player, id.toString(), new JsonPayload(json));
         } catch (ReflectiveOperationException | RuntimeException e) {
-            Bukkit.getLogger().fine("[DialogEngine] Could not read a click: " + e);
+            cannotRead(e);
         }
     }
 
@@ -162,8 +175,16 @@ public final class Clicks {
             if (!(player instanceof Player p) || view == null) return;
             handle(p, id, new ViewPayload(view));
         } catch (ReflectiveOperationException | RuntimeException e) {
-            Bukkit.getLogger().fine("[DialogEngine] Could not read a click: " + e);
+            cannotRead(e);
         }
+    }
+
+    /** Every press of every button goes through here, so a server whose event we cannot read is said once, loudly. */
+    private void cannotRead(Exception e) {
+        if (unreadable) return;
+        unreadable = true;
+        plugin.getLogger().log(Level.WARNING, "Could not read a button press from this server's click event,"
+                + " so buttons will leave players on \"Waiting for Server\"", e);
     }
 
     private static Object call(Object target, String name) throws ReflectiveOperationException {

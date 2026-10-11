@@ -161,7 +161,7 @@ Run in order. A line without a `[tag]` is a command the player runs.
 | `[delay] ticks` | Wait before the rest |
 | `[if] condition` | Stop here unless it holds |
 | `[permission] node` | Stop here unless the player has it |
-| `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box) |
+| `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box). The server never hears that such a button was pressed, so a dialog with one is shown as `after: close` even under `wait` |
 | `[myplugin:tag] ...` | Whatever another plugin registered |
 
 **What a player typed, in a command.** A `[console]` or `[player]` command
