@@ -60,7 +60,7 @@ public final class DrawnPack {
     private Served server;
     private int servedPort = -1;
     private String servedBind;
-    /** Whether a drawn dialog other than the samples and plugins' ({@link DrawnInstall}) is here, which is what sends the pack on join. */
+    /** Whether a drawn dialog other than the samples is here, which is what sends the pack on join. */
     private boolean ownDialogs;
     /** Players sent the pack since they joined, whatever they made of it so far. */
     private final java.util.Set<UUID> offered = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -91,7 +91,7 @@ public final class DrawnPack {
                 for (File dir : dirs) {
                     Path pack = dir.toPath().resolve("pack");
                     if (!Files.isDirectory(pack)) continue;
-                    if (!ns.getName().equalsIgnoreCase(SAMPLES) && !DrawnInstall.shipped(ns.toPath())) own = true;
+                    if (!ns.getName().equalsIgnoreCase(SAMPLES)) own = true;
                     try (var walk = Files.walk(pack)) {
                         for (Path p : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
                             String name = pack.relativize(p).toString().replace('\\', '/');
@@ -170,7 +170,7 @@ public final class DrawnPack {
             sha1 = null;
             engine.plugin().getLogger().warning("Could not build the drawn dialog pack: " + e.getMessage());
         }
-        // The samples and plugins' alone are not a reason to open a port: that waits for the first one opened.
+        // The samples alone are not a reason to open a port: that waits for the first one opened.
         if (ownDialogs || server != null) serve();
     }
 
@@ -368,9 +368,9 @@ public final class DrawnPack {
 
     /**
      * Whether a player joining is sent it. Not when the only drawn dialogs are
-     * the samples and those plugins ship: a server that has never made one of
-     * its own does not ask every player to download a pack, and their pack is
-     * sent when one is opened ({@link #needs}).
+     * the samples: a server that has never made one of its own does not ask
+     * every player to download a pack, and a sample's pack is sent when one is
+     * opened ({@link #needs}).
      */
     public boolean onJoin() {
         return ownDialogs;

@@ -66,27 +66,6 @@ public interface DialogEngineAPI {
      */
     void registerFolder(Plugin owner, String namespace, File folder);
 
-    /**
-     * Ships drawn dialogs (made in Studio's dialog editor) inside a plugin's
-     * jar. Everything under the jar's {@code drawn/<namespace>/} that its
-     * {@code drawn/<namespace>/files.txt} lists is copied into Dialog Engine's
-     * {@code drawn/<namespace>/} the first time this version of the plugin
-     * runs, and read. A dialog the server owner has changed since it was
-     * installed (with {@code /de edit} or by hand) is left as they made it.
-     * Their resource pack is sent to a player when they first open one, never
-     * on join. Open them with {@link #open} as {@code namespace:name}.
-     *
-     * @return whether anything was written (Dialog Engine has then read them)
-     */
-    boolean installDrawn(Plugin owner, String namespace);
-
-    /**
-     * A player's value for a drawn dialog's setting: what a switch, slider,
-     * dropdown or segmented control bound to {@code name} last set it to. Kept
-     * on the player. Empty when they have never set it.
-     */
-    Optional<String> setting(Player player, String name);
-
     /** Registers one dialog from a configuration section (handy for dialogs built in code). Replaced on reload only if registered again. */
     void registerDialog(Plugin owner, String dialogId, ConfigurationSection definition);
 

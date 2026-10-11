@@ -336,26 +336,6 @@ dialogs.registerList(this, "myplugin_quests", (viewer, ctx) -> quests.of(viewer)
 A dialog built in code is a `ConfigurationSection` in the same format:
 `registerDialog(plugin, "myplugin:x", section)`.
 
-### Shipping drawn dialogs
-
-A plugin can ship dialogs drawn in the browser editor inside its jar: put each
-one's folder (as `/de edit` writes it) under `drawn/<namespace>/` in your
-resources, list every file in `drawn/<namespace>/files.txt`, and call
-
-```java
-dialogs.installDrawn(this, "myplugin");   // then open "myplugin:<name>" as usual
-```
-
-They are copied into `plugins/DialogEngine/drawn/myplugin/` the first time
-each version of your plugin runs. One the server owner has changed since (with
-`/de edit` or by hand) is kept as they made it. Their resource pack is sent
-when a player first opens one, never on join.
-
-A drawn dialog's switches, sliders and dropdowns are settings kept on the
-player, which your plugin reads with `dialogs.setting(player, "name")`. A
-list's rows are values like any other: `warps_3` is row three, `warps_3_note`
-its `note` field and `warps_count` how many there are.
-
 ### Events
 
 | Event | |

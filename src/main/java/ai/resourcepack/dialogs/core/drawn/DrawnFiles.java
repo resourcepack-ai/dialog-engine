@@ -167,41 +167,11 @@ public final class DrawnFiles {
         return CHAT_ILLEGAL.matcher(s).replaceAll("").stripTrailing();
     }
 
-    /**
-     * Every string in the document, as a command: what a drawing of it may run.
-     * A list's rows are copies of its template with {@code {name}} numbered
-     * {@code {name_3}} (and {@code {name_field}} as {@code {name_3_field}}), so a
-     * command in a list is allowed once per row it is drawn in.
-     */
+    /** Every string in the document, as a command: what a drawing of it may run. */
     public static Set<String> commands(Map<String, Object> spec) {
         Set<String> out = new HashSet<>();
-        if (spec == null) return out;
-        collect(spec, out);
-        Map<String, Integer> lists = new LinkedHashMap<>();
-        lists(spec, lists);
-        for (Map.Entry<String, Integer> list : lists.entrySet()) {
-            Pattern p = Pattern.compile("\\{" + Pattern.quote(list.getKey()) + "((?:_[A-Za-z0-9_]*)?)(\\?[^{}]*)?\\}");
-            for (String c : List.copyOf(out)) {
-                if (!p.matcher(c).find()) continue;
-                for (int k = 1; k <= list.getValue(); k++) {
-                    String row = "{" + list.getKey() + "_" + k;
-                    out.add(p.matcher(c).replaceAll(m -> java.util.regex.Matcher.quoteReplacement(row + m.group(1) + (m.group(2) == null ? "" : m.group(2)) + "}")));
-                }
-            }
-        }
+        if (spec != null) collect(spec, out);
         return out;
-    }
-
-    /** Every list in the document, by name, with how many rows it draws. */
-    private static void lists(Object value, Map<String, Integer> out) {
-        if (value instanceof Map<?, ?> map) {
-            if (map.get("list") instanceof String name && name.matches("[A-Za-z0-9_]+") && map.get("rows") instanceof Number rows) {
-                out.merge(name, Math.min(64, Math.max(0, rows.intValue())), Math::max);
-            }
-            for (Object v : map.values()) lists(v, out);
-        } else if (value instanceof List<?> list) {
-            for (Object v : list) lists(v, out);
-        }
     }
 
     private static void collect(Object value, Set<String> out) {

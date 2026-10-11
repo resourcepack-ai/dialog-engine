@@ -126,11 +126,6 @@ public final class DrawnDialogs {
         return variables;
     }
 
-    /** A player's setting, as the API hands it out. */
-    public Optional<String> setting(Player player, String name) {
-        return variables().get(player, name);
-    }
-
     public File folder() {
         return new File(engine.plugin().getDataFolder(), "drawn");
     }
