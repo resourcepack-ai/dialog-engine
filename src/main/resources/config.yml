@@ -69,9 +69,10 @@ messages:
   pack-declined: "<red>This menu is drawn with a resource pack, and you declined it."
   pack-failed: "<red>This menu's resource pack could not be loaded."
 
-# /de edit <id> opens a dialog in the dialog editor at resourcepack.ai, in the
-# browser, with no account. Pressing "Send to server" there writes it back into
-# its file here and reloads. Only what you edit is sent: that one dialog.
+# /de edit <id> draws a dialog in the dialog editor at resourcepack.ai, in the
+# browser, with no account. Pressing "Send to server" there writes it into
+# drawn/<namespace>/<id>/ here and reloads. Only that one dialog is sent.
+# YAML dialogs are edited in their files, not in the browser.
 # It must be https:// (plain http:// only for a Studio on this machine).
 edit:
   url: "https://studio.resourcepack.ai"

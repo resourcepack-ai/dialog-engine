@@ -82,9 +82,10 @@ ask anybody to download anything.
 
 ## Writing a dialog
 
-In the browser: `/de edit <namespace:id>` opens it in Studio's dialog editor
-(no account) and Send to server writes it back under its key, leaving the rest
-of the file alone. `edit.url` in config.yml says where the editor is, and must
+In the browser: `/de edit <namespace:id>` draws a dialog in Studio's dialog
+editor (no account), a new one or a drawn one you made there before, and Send
+to server writes it into `drawn/<namespace>/<id>/`. A YAML dialog is edited in
+its file, not in the browser. `edit.url` in config.yml says where the editor is, and must
 be https (plain http only for one on the same machine).
 
 
@@ -260,7 +261,7 @@ open it with `{target}` = Steve. The last argument takes the rest of the line.
 `if:` on a body entry, input or button, and the `[if]` action.
 
 ```
-{muted}                            true unless empty, false, 0, no, off or unknown
+{muted}                            true unless empty, false, 0, no, off, null or unfilled
 !{muted}
 {warnings} >= 3                    numbers compare as numbers, anything else as words
 {rank} == admin && perm:server.staff

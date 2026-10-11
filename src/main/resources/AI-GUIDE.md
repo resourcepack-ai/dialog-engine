@@ -222,7 +222,7 @@ open it with `{target}` = Steve. The last argument takes the rest of the line.
 `if:` on a body entry, input or button, and the `[if]` action.
 
 ```
-{muted}                            true unless empty, false, 0, no, off or unknown
+{muted}                            true unless empty, false, 0, no, off, null or unfilled
 !{muted}
 {warnings} >= 3                    numbers compare as numbers, anything else as words
 {rank} == admin && perm:server.staff
