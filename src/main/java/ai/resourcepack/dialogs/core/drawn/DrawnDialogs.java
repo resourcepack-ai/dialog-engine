@@ -14,6 +14,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -87,7 +88,17 @@ public final class DrawnDialogs {
      */
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
-                 DialogDef def) {}
+                 DialogDef def, Map<String, PageSounds> sounds) {}
+
+    /** A click sound Studio sent (its {@code lib/dialogs/click-sound.ts}): an empty key is silence. */
+    public record ClickSound(String key, float volume, float pitch) {}
+
+    /**
+     * What a click on one page's picture sounds like: its pieces' own sounds,
+     * by the command as {@link #rewrite} sends it, else the dialog's ({@code
+     * dialog}, null for the config's {@code click-sound}).
+     */
+    public record PageSounds(ClickSound dialog, Map<String, ClickSound> clicks) {}
 
     /**
      * The drawing a player was last shown. {@code nonce} is what its action
@@ -180,6 +191,7 @@ public final class DrawnDialogs {
         Set<String> waits = new LinkedHashSet<>();
         List<List<String>> actions = new ArrayList<>();
         List<String> refused = new ArrayList<>();
+        Map<String, JsonObject> written = new LinkedHashMap<>();
         String first = null;
         for (JsonElement e : list) {
             JsonObject page = e.getAsJsonObject();
@@ -193,6 +205,7 @@ public final class DrawnDialogs {
             JsonElement rewritten = rewrite(json, actions, allowed, refused);
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
             pages.put(studioId, GSON.toJson(rewritten));
+            written.put(studioId, page);
             if (page.has("vars")) {
                 for (JsonElement v : page.getAsJsonArray("vars")) {
                     Set<String> values = vars.computeIfAbsent(v.getAsJsonObject().get("name").getAsString(), k -> new LinkedHashSet<>());
@@ -215,8 +228,68 @@ public final class DrawnDialogs {
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
                 Map.of(), command, List.of(), permission, List.of(), null, null, Map.of());
+        // Once every page is rewritten: a sound's command is found among the
+        // actions all of them made.
+        Map<String, PageSounds> sounds = new LinkedHashMap<>();
+        written.forEach((studioId, page) -> {
+            PageSounds s = pageSounds(page, actions);
+            if (s != null) sounds.put(studioId, s);
+        });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
-                Set.copyOf(waits), def);
+                Set.copyOf(waits), def, java.util.Collections.unmodifiableMap(sounds));
+    }
+
+    /** A sound event as a server takes one; Studio's {@code CLICK_SOUND_EVENT} is the same rule. */
+    private static final Pattern SOUND_EVENT = Pattern.compile("(?:[a-z0-9_.-]+:)?[a-z0-9_./-]{1,200}");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{[^{}]+}");
+
+    /** One page's click sounds from what Studio sent beside it, or null when it sent none. */
+    static PageSounds pageSounds(JsonObject page, List<List<String>> actions) {
+        ClickSound dialog = page.get("clickSound") instanceof JsonObject o ? clickSound(o) : null;
+        Map<String, ClickSound> clicks = new LinkedHashMap<>();
+        if (page.get("clickSounds") instanceof JsonArray list) {
+            for (JsonElement e : list) {
+                if (!(e instanceof JsonObject o) || !(o.get("command") instanceof JsonPrimitive c) || !c.isString()) continue;
+                ClickSound sound = clickSound(o);
+                String key = rewritten(c.getAsString(), actions);
+                if (sound != null && key != null) clicks.putIfAbsent(key, sound);
+            }
+        }
+        return dialog == null && clicks.isEmpty() ? null : new PageSounds(dialog, java.util.Collections.unmodifiableMap(clicks));
+    }
+
+    /** A click sound, or null when its sound is not an event name: a typo keeps the click as it was. */
+    static ClickSound clickSound(JsonObject o) {
+        String key = o.get("sound") instanceof JsonPrimitive s && s.isString() ? s.getAsString().trim().toLowerCase(Locale.ROOT) : "";
+        if (!key.isEmpty() && !SOUND_EVENT.matcher(key).matches()) return null;
+        float volume = o.get("volume") instanceof JsonPrimitive v && v.isNumber() ? v.getAsFloat() : 0.25f;
+        float pitch = o.get("pitch") instanceof JsonPrimitive p && p.isNumber() ? p.getAsFloat() : 1f;
+        if (!Float.isFinite(volume)) volume = 0.25f;
+        if (!Float.isFinite(pitch)) pitch = 1f;
+        return new ClickSound(key, Math.max(0f, Math.min(1f, volume)), Math.max(0.5f, Math.min(2f, pitch)));
+    }
+
+    /** A Studio click's command as {@link #rewrite} sends it, slash off; null for one it refused. */
+    static String rewritten(String command, List<List<String>> actions) {
+        String bare = command.startsWith("/") ? command.substring(1) : command;
+        Matcher m = ENGINE_CLICK.matcher(bare);
+        if (m.matches()) return CLICK + " " + m.group(2) + " " + m.group(3);
+        int n = actions.indexOf(actions(bare));
+        return n < 0 ? null : CLICK + " act " + n;
+    }
+
+    /** Whether {@code command} is the click written {@code held}: a placeholder was filled as it opened. */
+    static boolean sameCommand(String held, String command) {
+        String bare = command.startsWith("/") ? command.substring(1) : command;
+        StringBuilder pattern = new StringBuilder();
+        Matcher p = PLACEHOLDER.matcher(held);
+        int at = 0;
+        while (p.find()) {
+            pattern.append(Pattern.quote(held.substring(at, p.start()))).append(".*?");
+            at = p.end();
+        }
+        pattern.append(Pattern.quote(held.substring(at)));
+        return Pattern.compile(pattern.toString(), Pattern.DOTALL).matcher(bare).matches();
     }
 
     /**
@@ -387,7 +460,7 @@ public final class DrawnDialogs {
         String json = d == null ? null : visible(player, d, d.pages.get(shown.page), shown.session.values);
         String seen = d == null ? null : shown.json;
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
-            if (picture(json, command) || picture(seen, command)) clickSound(player);
+            if (picture(json, command) || picture(seen, command)) clickSound(player, d, shown, command);
             engine.closeDialog(player);
             return;
         }
@@ -408,7 +481,7 @@ public final class DrawnDialogs {
                 return;
             }
         }
-        if (picture(json, command) || picture(seen, command)) clickSound(player);
+        if (picture(json, command) || picture(seen, command)) clickSound(player, d, shown, command);
         if (args[0].equalsIgnoreCase("page") && args.length == 2) {
             String page = args[1].toLowerCase(Locale.ROOT);
             Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
@@ -468,6 +541,34 @@ public final class DrawnDialogs {
         if (json == null) return false;
         return json.contains("\"action\":\"run_command\",\"command\":" + GSON.toJson(command))
                 || json.contains("\"action\":\"run_command\",\"command\":" + GSON.toJson("/" + command));
+    }
+
+    /**
+     * The sound of a click on the picture: the clicked piece's own, else its
+     * dialog's, as Studio drew them, else the config's {@code click-sound}.
+     */
+    private void clickSound(Player player, Drawn d, Shown shown, String command) {
+        PageSounds sounds = d == null || shown == null ? null : d.sounds().get(shown.page);
+        ClickSound sound = null;
+        if (sounds != null) {
+            for (Map.Entry<String, ClickSound> click : sounds.clicks().entrySet()) {
+                if (sameCommand(click.getKey(), command)) {
+                    sound = click.getValue();
+                    break;
+                }
+            }
+            if (sound == null) sound = sounds.dialog();
+        }
+        if (sound == null) {
+            clickSound(player);
+            return;
+        }
+        if (sound.key().isEmpty() || sound.volume() <= 0f) return;
+        try {
+            Platform.sound(player, sound.key(), sound.volume(), sound.pitch());
+        } catch (RuntimeException e) {
+            // A sound name that is not a key: no sound, rather than no click.
+        }
     }
 
     /** The game's own button click, which a click on the picture does not make by itself. */
