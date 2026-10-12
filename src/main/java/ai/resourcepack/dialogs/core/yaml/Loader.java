@@ -172,6 +172,10 @@ public final class Loader {
             problems.add(source + ": " + id + " cannot pause with after: none (the game refuses it); pause is off");
             pause = false;
         }
+        // Seamless is none on the wire, which the game will not pause under. Not
+        // said: it is the default, so it would be said of every pausing dialog,
+        // and a server's game does not pause anyway.
+        if (after == Defs.After.SEAMLESS) pause = false;
 
         String ifMissing = s.getString("if-missing");
         if (ifMissing != null && !ifMissing.contains(":")) ifMissing = namespace + ":" + ifMissing;
@@ -221,15 +225,12 @@ public final class Loader {
 
     private Defs.After after(String raw, String source, String id) {
         if (raw == null) return defaultAfter;
-        return switch (raw.toLowerCase(Locale.ROOT).replace('-', '_')) {
-            case "close" -> Defs.After.CLOSE;
-            case "none", "stay" -> Defs.After.NONE;
-            case "wait", "wait_for_response" -> Defs.After.WAIT_FOR_RESPONSE;
-            default -> {
-                problems.add(source + ": " + id + " has unknown after '" + raw + "'");
-                yield defaultAfter;
-            }
-        };
+        Defs.After after = Defs.After.parse(raw);
+        if (after == null) {
+            problems.add(source + ": " + id + " has unknown after '" + raw + "'");
+            return defaultAfter;
+        }
+        return after;
     }
 
     private ButtonDef button(ConfigurationSection b, String fallbackId, String source, String id) {

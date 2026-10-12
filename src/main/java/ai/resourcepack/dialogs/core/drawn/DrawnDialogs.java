@@ -83,12 +83,22 @@ public final class DrawnDialogs {
     /**
      * One drawn dialog: its pages by Studio's id for each, the first first, the
      * action lists its clicks run, which pages stay up when clicked
-     * ({@code after_action: none}), and which wait for the server to answer
-     * ({@code after_action: wait_for_response}).
+     * ({@code after_action: none}), which wait for the server to answer
+     * ({@code after_action: wait_for_response}), and which stay up until the
+     * engine answers and are closed by it when nothing else does (Studio's
+     * {@code closeAfterClick}: seamless).
      */
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
-                 DialogDef def, Map<String, PageSounds> sounds) {}
+                 Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds) {
+
+        /** What a click on this page waits for: what has to answer it. */
+        Defs.After answering(String page) {
+            if (seamless.contains(page)) return Defs.After.SEAMLESS;
+            if (waits.contains(page)) return Defs.After.WAIT_FOR_RESPONSE;
+            return staysUp.contains(page) ? Defs.After.NONE : Defs.After.CLOSE;
+        }
+    }
 
     /** A click sound Studio sent (its {@code lib/dialogs/click-sound.ts}): an empty key is silence. */
     public record ClickSound(String key, float volume, float pitch) {}
@@ -189,6 +199,7 @@ public final class DrawnDialogs {
         Map<String, Set<String>> vars = new LinkedHashMap<>();
         Set<String> staysUp = new LinkedHashSet<>();
         Set<String> waits = new LinkedHashSet<>();
+        Set<String> seamless = new LinkedHashSet<>();
         List<List<String>> actions = new ArrayList<>();
         List<String> refused = new ArrayList<>();
         Map<String, JsonObject> written = new LinkedHashMap<>();
@@ -199,7 +210,10 @@ public final class DrawnDialogs {
             if (first == null) first = studioId;
             JsonElement json = page.get("json");
             if (json instanceof JsonObject o && o.get("after_action") instanceof JsonElement a && a.isJsonPrimitive()) {
-                if ("none".equals(a.getAsString())) staysUp.add(studioId);
+                // Sent as none and closed by the engine after a click nothing
+                // else answered: Studio says so beside the JSON.
+                boolean closes = page.get("closeAfterClick") instanceof JsonElement c && c.isJsonPrimitive() && c.getAsBoolean();
+                if ("none".equals(a.getAsString())) (closes ? seamless : staysUp).add(studioId);
                 else if ("wait_for_response".equals(a.getAsString())) waits.add(studioId);
             }
             JsonElement rewritten = rewrite(json, actions, allowed, refused);
@@ -236,7 +250,7 @@ public final class DrawnDialogs {
             if (s != null) sounds.put(studioId, s);
         });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
-                Set.copyOf(waits), def, java.util.Collections.unmodifiableMap(sounds));
+                Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds));
     }
 
     /** A sound event as a server takes one; Studio's {@code CLICK_SOUND_EVENT} is the same rule. */
@@ -386,7 +400,10 @@ public final class DrawnDialogs {
         json = DialogBars.fill(json);
         boolean permitted = d.permission == null || player.hasPermission(d.permission);
         lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json));
-        if (Platform.showJson(player, json, engine.plugin().getLogger())) return true;
+        if (Platform.showJson(player, json, engine.plugin().getLogger())) {
+            engine.replacedScreen(player);
+            return true;
+        }
         engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ".");
         return false;
     }
@@ -459,6 +476,9 @@ public final class DrawnDialogs {
         // hidden from this player.
         String json = d == null ? null : visible(player, d, d.pages.get(shown.page), shown.session.values);
         String seen = d == null ? null : shown.json;
+        // A click on a page that waits has put the client on its "Waiting for
+        // Server" screen, whatever is made of the click: Engine.closeDialog.
+        if (d != null && d.waits.contains(shown.page)) engine.clickedWaiting(player);
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
             if (picture(json, command) || picture(seen, command)) clickSound(player, d, shown, command);
             engine.closeDialog(player);
@@ -506,18 +526,18 @@ public final class DrawnDialogs {
                 for (String var : d.vars.keySet()) variables().get(player, var).ifPresent(v -> values.putIfAbsent(var, v));
                 Session session = shown.session.with(values, shown.session.untrusted);
                 ClickCtx ctx = new ClickCtx(engine, player, d.def, session, "act_" + n, Map.of(), null, null);
+                // A page that waits, or is seamless, is answered when its actions
+                // end (ClickCtx.finish): by the next dialog, or by a close.
+                ctx.answering(d.answering(shown.page));
                 engine.run(ctx, d.actions.get(n));
                 if (ctx.responded || !player.isOnline() || lastShown.get(uuid) == null || lastShown.get(uuid).nonce != null) return;
                 // The nonce is spent. A page that stays up when clicked is drawn
                 // again with a fresh one, so its next click works; any other
-                // page's drawing is over. One that closes itself on the click
-                // has gone already, but one that waits is showing "Waiting for
-                // Server" until something answers, and nothing else will.
+                // page closed itself on the click, and its drawing is over.
                 if (d.staysUp.contains(shown.page)) {
                     showPage(player, d, shown.page, shown.session);
                 } else {
                     retire(player);
-                    if (d.waits.contains(shown.page)) engine.closeUnlessShown(player);
                 }
             });
         }
@@ -525,11 +545,11 @@ public final class DrawnDialogs {
 
     /**
      * A click that cannot go ahead ends the drawing. On a page that waits for
-     * the server it closes it too, or the player is left on the client's
-     * waiting screen.
+     * the server, or is seamless, it closes it too: the player would be left on
+     * the client's waiting screen, or looking at a dialog that does nothing.
      */
     private void refuse(Player player, Drawn d, Shown shown) {
-        if (d.waits.contains(shown.page)) engine.closeDialog(player);
+        if (d.answering(shown.page).awaitsAnswer()) engine.closeDialog(player);
         else retire(player);
     }
 

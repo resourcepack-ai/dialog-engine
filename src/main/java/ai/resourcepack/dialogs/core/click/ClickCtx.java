@@ -30,6 +30,11 @@ public final class ClickCtx implements ClickContext {
     /** Something has answered the click: a dialog was shown or the screen was closed. */
     public boolean responded;
     boolean stopped;
+    /**
+     * What the screen the click came from was sent as, so what has to answer
+     * it: the dialog's {@code after}, unless it went out as something else.
+     */
+    private Defs.After after;
 
     public ClickCtx(Engine engine, Player player, DialogDef def, Session session, String buttonId, Map<String, String> inputs,
              String alias, Map<String, String> row) {
@@ -41,6 +46,7 @@ public final class ClickCtx implements ClickContext {
         this.inputs = Collections.unmodifiableMap(new LinkedHashMap<>(inputs));
         this.alias = alias;
         this.row = row == null ? Map.of() : row;
+        this.after = def.after();
         // The click itself makes this the player's current dialog, values and all.
         engine.remember(player, session);
     }
@@ -50,17 +56,39 @@ public final class ClickCtx implements ClickContext {
         return alias == null || row.isEmpty() ? s : s.withRow(alias, row);
     }
 
+    /** What the click's screen was sent as, when that is not its dialog's {@code after}. */
+    public void answering(Defs.After sentAs) {
+        if (sentAs != null) after = sentAs;
+    }
+
+    /** Whether the client is waiting on the engine to answer this click (wait or seamless). */
+    boolean awaitsAnswer() {
+        return !responded && after.awaitsAnswer();
+    }
+
     /**
      * Called when the actions are done. A dialog waiting for its response must
-     * get one, or the player is left looking at "waiting for the server".
+     * get one, or the player is left looking at "waiting for the server", or
+     * at a seamless dialog that never goes away.
      */
     public void finish() {
-        if (responded || def.after() != Defs.After.WAIT_FOR_RESPONSE || !player.isOnline()) return;
+        if (!awaitsAnswer() || !player.isOnline()) return;
         responded = true;
         // Not straight away: an action may have asked a plugin to open the next
-        // dialog a moment from now (after a database read, say). Closing first
-        // would flash the world between the two.
-        engine.closeUnlessShown(player);
+        // dialog a moment from now. Closing first would flash the world between
+        // the two. See Engine.answer for how long.
+        engine.answer(player, after);
+    }
+
+    /**
+     * Answers the click by closing, now: before a command that may open a
+     * screen of its own. The engine cannot see another plugin's dialog arrive,
+     * so a close that came after it would take it away.
+     */
+    void closeNow() {
+        if (!awaitsAnswer()) return;
+        responded = true;
+        engine.closeDialog(player);
     }
 
     @Override

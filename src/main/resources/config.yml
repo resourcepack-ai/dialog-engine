@@ -28,17 +28,21 @@ click-lifetime-minutes: 30
 
 # What a dialog does the moment a button is pressed, when the dialog does not
 # say (after: in its definition):
-#   wait  - stays up with "waiting for the server" until the engine answers.
-#           No flicker between one dialog and the next. (Recommended)
-#           A dialog with a [url], [copy] or [suggest] button is shown as
-#           close, since the server never hears those being pressed.
+#   seamless - stays on screen exactly as it is until the engine answers: the
+#           next dialog takes its place with nothing in between, and when no
+#           dialog follows, the engine closes it. No flicker, no waiting
+#           screen. (Recommended)
+#   wait  - swaps to the game's "Waiting for Server" screen until the engine
+#           answers. A dialog with a [url], [copy] or [suggest] button is
+#           shown as close, since the server never hears those being pressed.
 #   close - closes at once, then the next dialog (if any) opens.
 #   none  - stays exactly as it is.
-default-after: wait
+default-after: seamless
 
 # Under "wait", how long the engine holds the waiting screen for a plugin to
 # answer a button (say, with a dialog it has to look something up for) before
-# closing it. In ticks; 20 is a second.
+# closing it. In ticks; 20 is a second. A seamless dialog is closed on the
+# next tick instead, since it is still on the screen.
 close-delay-ticks: 10
 
 # The sound a click on a drawn dialog makes: the game's own button click, which
@@ -98,3 +102,7 @@ pack:
   # Or host the pack yourself and put its URL here (/de pack writes it out).
   url: ""
   prompt: "<gray>This server's menus are drawn with a small resource pack."
+
+# Which version of this file it is, so an update can move a setting whose
+# default changed. Leave it alone.
+config-version: 2

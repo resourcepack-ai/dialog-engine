@@ -43,6 +43,7 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
             return;
         }
         saveDefaultConfig();
+        upgradeConfig();
         // The format, written for an AI agent to read. Replaced on every start,
         // so it always describes the version that is running.
         saveResource("AI-GUIDE.md", true);
@@ -99,6 +100,38 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
                 .studio(getConfig().getString("edit.url", "https://studio.resourcepack.ai"))
                 .enabledWhen(() -> getConfig().getBoolean("telemetry", true))
                 .start();
+    }
+
+    /**
+     * Moves a config.yml written by an older version onto a default that has
+     * changed since, once. Edited as text, so every comment and every other
+     * line stays as the owner left it.
+     *
+     * <p>Version 2 (0.4.0): {@code default-after} went from {@code wait} to
+     * {@code seamless}. A file without a {@code config-version} that still says
+     * {@code wait} says it because that was the default, so it moves; one that
+     * says {@code wait} after this has chosen it.
+     */
+    private void upgradeConfig() {
+        File file = new File(getDataFolder(), "config.yml");
+        try {
+            String text = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            if (java.util.regex.Pattern.compile("(?m)^config-version:").matcher(text).find()) return;
+            String eol = text.contains("\r\n") ? "\r\n" : "\n";
+            String moved = text.replaceFirst("(?m)^default-after:[ \\t]*[\"']?wait[\"']?[ \\t]*(?=\\r?$)", "default-after: seamless");
+            String out = moved + (moved.endsWith("\n") ? "" : eol) + eol
+                    + "# Which version of this file it is, so an update can move a setting whose" + eol
+                    + "# default changed. Leave it alone." + eol
+                    + "config-version: 2" + eol;
+            java.nio.file.Files.writeString(file.toPath(), out, java.nio.charset.StandardCharsets.UTF_8);
+            if (!moved.equals(text)) {
+                getLogger().info("config.yml: default-after is now seamless, the new default (a dialog stays on screen"
+                        + " until the next one replaces it, with no waiting screen). Set it back to wait for the old behaviour.");
+            }
+            reloadConfig();
+        } catch (java.io.IOException e) {
+            getLogger().warning("Could not update config.yml: " + e.getMessage());
+        }
     }
 
     /** Every file listed in the jar's {@code drawn/samples/files.txt}. */

@@ -172,6 +172,20 @@ public final class Platform {
         return null;
     }
 
+    /**
+     * Closes whatever screen the client has, dialog or not: the server closing
+     * the player's inventory, which the client answers by setting no screen at
+     * all. The one way to take away the client's "Waiting for Server" screen,
+     * which the game's clear_dialog does not touch.
+     */
+    public static void closeScreen(Player player) {
+        try {
+            player.closeInventory();
+        } catch (RuntimeException ignored) {
+            // nothing more to try
+        }
+    }
+
     public static void closeDialog(Player player) {
         if (CLOSE != null) {
             try {

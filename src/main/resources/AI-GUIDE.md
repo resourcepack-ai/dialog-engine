@@ -68,7 +68,7 @@ shop:
   title: "<gold><bold>Shop"
   columns: 2                    # buttons side by side
   escape: true                  # Escape closes it (default true)
-  after: wait                   # wait | close | none, see config.yml
+  after: seamless               # seamless | wait | close | none, see config.yml
   body:
     - "<gray>You have <white>%vault_eco_balance%</white> coins."   # text
     - item: diamond             # an item, with words beside it

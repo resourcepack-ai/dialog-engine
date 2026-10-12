@@ -55,6 +55,18 @@ public final class Actions {
         }
     }
 
+    /** The actions that answer a click themselves: each shows a dialog or closes the screen. */
+    private static final Set<String> ANSWERS = Set.of("open", "dialog", "back", "refresh", "reopen", "page", "close");
+
+    /** Whether an action from {@code from} on answers the click: shows the next dialog, or closes. */
+    private static boolean answeredLater(List<String> actions, int from) {
+        for (int i = from; i < actions.size(); i++) {
+            String line = actions.get(i);
+            if (line != null && !line.isBlank() && ANSWERS.contains(Line.of(line).tag())) return true;
+        }
+        return false;
+    }
+
     public void run(ClickCtx ctx, List<String> actions, int from) {
         if (from == 0 && !commandsSafe(ctx, actions)) {
             ctx.finish();
@@ -75,6 +87,12 @@ public final class Actions {
                 return;
             }
             boolean command = COMMAND_TAGS.contains(tag);
+            // A command may open a screen of its own (another plugin's dialog, a
+            // chest), which the engine would never hear of and a close after it
+            // would shut. So a click waiting on an answer that no later action
+            // here will give is closed first, and whatever the command opens
+            // arrives after the close rather than before it.
+            if (command && ctx.awaitsAnswer() && !answeredLater(actions, i + 1)) ctx.closeNow();
             Text.Mode mode = TEXT_TAGS.contains(tag) ? Text.Mode.TEXT : command ? Text.Mode.COMMAND : Text.Mode.RAW;
             String arg;
             try {

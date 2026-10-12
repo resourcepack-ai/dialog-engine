@@ -56,7 +56,8 @@ public final class Renderer {
     }
 
     /** What one drawing produced: the dialog, and the inputs on it (so a click knows what to read). */
-    public record Drawn(JsonObject dialog, List<InputDef> inputs, Map<String, Map<String, String>> optionLabels) {}
+    /** {@code after}: what the dialog was sent as, which is not always what it says. */
+    public record Drawn(JsonObject dialog, List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, Defs.After after) {}
 
     /** Draws it as drawing number {@code drawing} of the viewer's (see {@link Engine#onClick}). */
     public Drawn draw(DialogDef def, Session session, Player viewer, long drawing) {
@@ -102,6 +103,13 @@ public final class Renderer {
             exit = button(def, def.exit(), scope, session, drawnInputs, optionLabels, viewer, drawing);
         }
 
+        // A notice with no button gets the game's own Ok, which calls nothing
+        // back: under seamless it would do nothing at all, the dialog being sent
+        // as none. This one calls back, and the engine closes it.
+        if (def.after() == Defs.After.SEAMLESS && buttons.isEmpty() && exit == null && def.type() != Type.LINKS) {
+            exit = okButton(viewer, drawing);
+        }
+
         JsonObject dialog = new JsonObject();
         type(dialog, def, buttons, exit);
         dialog.add("title", Text.json(def.title(), scope));
@@ -119,7 +127,18 @@ public final class Renderer {
             after = Defs.After.CLOSE;
         }
         dialog.addProperty("after_action", after.json());
-        return new Drawn(dialog, drawnInputs, optionLabels);
+        return new Drawn(dialog, drawnInputs, optionLabels, after);
+    }
+
+    /** The game's Ok, calling back so the engine can close the screen. */
+    private JsonObject okButton(Player viewer, long drawing) {
+        JsonObject label = new JsonObject();
+        label.addProperty("translate", "gui.ok");
+        JsonObject button = new JsonObject();
+        button.add("label", label);
+        String token = engine.clicks().bind(viewer, engine.clickLifetime(), drawing, (clicker, payload) -> engine.closeDialog(clicker));
+        button.add("action", Clicks.action(token));
+        return button;
     }
 
     /** Whether pressing this button is something only the client does (see {@link #staticAction}). */

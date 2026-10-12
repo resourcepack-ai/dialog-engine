@@ -56,6 +56,8 @@ public final class Clicks {
     private final SecureRandom random = new SecureRandom();
     private Plugin plugin;
     private boolean unreadable;
+    /** How a click that failed closes the screen: the engine's close, which knows about the waiting screen. */
+    private java.util.function.Consumer<Player> onFailure = Platform::closeDialog;
 
     /** A token for one button of drawing {@code drawing}; the action is handed the player who clicked. */
     public String bind(Player player, Duration lifetime, long drawing, BiConsumer<Player, Payload> action) {
@@ -81,6 +83,11 @@ public final class Clicks {
         action.addProperty("id", ID);
         action.add("additions", additions);
         return action;
+    }
+
+    /** What closes a player's screen when a click on it fails. */
+    public void onFailure(java.util.function.Consumer<Player> close) {
+        if (close != null) onFailure = close;
     }
 
     public void forget(UUID player) {
@@ -113,7 +120,7 @@ public final class Clicks {
             // "Waiting for Server", and nothing else is going to take it away.
             plugin.getLogger().log(Level.WARNING, "A button press by " + player.getName() + " failed", e);
             forget(player.getUniqueId());
-            Platform.closeDialog(player);
+            onFailure.accept(player);
         }
     }
 

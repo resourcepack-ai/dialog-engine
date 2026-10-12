@@ -88,6 +88,19 @@ public final class Engine implements DialogEngineAPI {
      * button only works while the drawing it was bound to is the latest.
      */
     private final Map<UUID, Long> shown = new ConcurrentHashMap<>();
+    /**
+     * What the YAML dialog on each player's screen was SENT as, which is not
+     * always what it says: a "wait" dialog with a link button goes as close
+     * ({@link Renderer}).
+     */
+    private final Map<UUID, Defs.After> shownAfter = new ConcurrentHashMap<>();
+    /**
+     * Players whose client has swapped the dialog for its own "Waiting for
+     * Server" screen: they pressed a button on one sent with
+     * {@code wait_for_response}, and nothing has answered yet. See
+     * {@link #closeDialog} for why it matters.
+     */
+    private final Set<UUID> onWaitingScreen = ConcurrentHashMap.newKeySet();
     /** Each player's clicks this second: {second, count}. */
     private final Map<UUID, long[]> clickRate = new ConcurrentHashMap<>();
     /**
@@ -104,7 +117,7 @@ public final class Engine implements DialogEngineAPI {
 
     private Duration clickLifetime = Duration.ofMinutes(30);
     private String validationFormat = "<red>{error}";
-    private Defs.After defaultAfter = Defs.After.WAIT_FOR_RESPONSE;
+    private Defs.After defaultAfter = Defs.After.SEAMLESS;
 
     public Engine(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -121,11 +134,8 @@ public final class Engine implements DialogEngineAPI {
         clickLifetime = Duration.ofMinutes(Math.max(1, cfg.getLong("click-lifetime-minutes", 30)));
         validationFormat = cfg.getString("validation-format", "<red>{error}");
         closeDelay = Math.max(0, cfg.getLong("close-delay-ticks", 10));
-        defaultAfter = switch (cfg.getString("default-after", "wait").toLowerCase(Locale.ROOT)) {
-            case "close" -> Defs.After.CLOSE;
-            case "none", "stay" -> Defs.After.NONE;
-            default -> Defs.After.WAIT_FOR_RESPONSE;
-        };
+        Defs.After configured = Defs.After.parse(cfg.getString("default-after", "seamless"));
+        defaultAfter = configured == null ? Defs.After.SEAMLESS : configured;
         Papi.reset();
         jsonCache.clear();
         warned.clear();
@@ -263,6 +273,7 @@ public final class Engine implements DialogEngineAPI {
 
     /** Starts listening for button presses. Returns which server's click event it found, or null for none. */
     public String listenForClicks() {
+        clicks.onFailure(this::closeDialog);
         return clicks.listen(plugin);
     }
 
@@ -326,6 +337,8 @@ public final class Engine implements DialogEngineAPI {
         waitingForPack.remove(player.getUniqueId());
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
+        shownAfter.remove(player.getUniqueId());
+        onWaitingScreen.remove(player.getUniqueId());
         clickRate.remove(player.getUniqueId());
         clicks.forget(player.getUniqueId());
     }
@@ -333,6 +346,11 @@ public final class Engine implements DialogEngineAPI {
     /** Closes the player's dialog, and with it every button it had. */
     public void closeDialog(Player player) {
         Platform.closeDialog(player);
+        // The game's clear_dialog closes a DIALOG and nothing else, and the
+        // screen a "wait" button leaves up is not one: the client kept showing
+        // "Waiting for Server" until its Back button woke, five seconds after the
+        // click. A container close takes away whatever screen the client has.
+        if (onWaitingScreen.remove(player.getUniqueId())) Platform.closeScreen(player);
         clicks.forget(player.getUniqueId());
         drawn.retire(player);
     }
@@ -353,12 +371,45 @@ public final class Engine implements DialogEngineAPI {
 
     /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
     public void closeUnlessShown(Player player) {
+        closeUnlessShown(player, closeDelay);
+    }
+
+    private void closeUnlessShown(Player player, long delay) {
         long before = shown.getOrDefault(player.getUniqueId(), 0L);
         Runnable close = () -> {
             if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player);
         };
-        if (closeDelay == 0) close.run();
-        else Bukkit.getScheduler().runTaskLater(plugin, close, closeDelay);
+        if (delay == 0) close.run();
+        else Bukkit.getScheduler().runTaskLater(plugin, close, delay);
+    }
+
+    /**
+     * Answers a click that nothing else answered, on a dialog whose client is
+     * waiting for one ({@link Defs.After#awaitsAnswer}): closes it, unless
+     * another dialog reaches the player first. Under "wait" that is
+     * close-delay-ticks away, the time a plugin gets to fetch what its next
+     * dialog shows. Under "seamless" the dialog is still on the screen, so
+     * holding it that long would read as the button not working: the next tick.
+     */
+    public void answer(Player player, Defs.After after) {
+        if (after == Defs.After.WAIT_FOR_RESPONSE) closeUnlessShown(player, closeDelay);
+        else if (after == Defs.After.SEAMLESS) closeUnlessShown(player, 1);
+    }
+
+    /**
+     * Something new is on the player's screen in place of what was there: a
+     * drawn page, which {@link DrawnDialogs} shows without coming through
+     * {@link #show}. Counted like any other showing, so a close waiting to
+     * happen does not take it away.
+     */
+    public void replacedScreen(Player player) {
+        shown.merge(player.getUniqueId(), 1L, Long::sum);
+        onWaitingScreen.remove(player.getUniqueId());
+    }
+
+    /** A button on a dialog sent with wait_for_response was pressed: the client is on its waiting screen. */
+    public void clickedWaiting(Player player) {
+        onWaitingScreen.add(player.getUniqueId());
     }
 
     // ------------------------------------------------------------------ showing
@@ -386,6 +437,8 @@ public final class Engine implements DialogEngineAPI {
             if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;
             sessions.put(player.getUniqueId(), session);
             shown.merge(player.getUniqueId(), 1L, Long::sum);
+            shownAfter.remove(player.getUniqueId());
+            onWaitingScreen.remove(player.getUniqueId());
             // The YAML dialog it replaced is gone from the screen, and its buttons with it.
             clicks.forget(player.getUniqueId());
             return true;
@@ -398,14 +451,20 @@ public final class Engine implements DialogEngineAPI {
         if (event.isCancelled()) return false;
         try {
             long drawing = shown.getOrDefault(player.getUniqueId(), 0L) + 1;
+            Defs.After sentAs;
             if (def.json() != null) {
                 showJson(player, def, session);
+                // Whatever the author's JSON says, nothing of it calls back here.
+                sentAs = Defs.After.CLOSE;
             } else {
                 Renderer.Drawn drawn = renderer.draw(def, session, player, drawing);
                 if (!Platform.showOwn(player, drawn.dialog())) throw new IllegalStateException("no route to the screen");
+                sentAs = drawn.after();
             }
             sessions.put(player.getUniqueId(), session);
             shown.put(player.getUniqueId(), drawing);
+            shownAfter.put(player.getUniqueId(), sentAs);
+            onWaitingScreen.remove(player.getUniqueId());
             // Only the screen the player now has can be pressed: the one before is gone.
             clicks.retire(player.getUniqueId(), drawing);
             drawn.retire(player);
@@ -469,11 +528,16 @@ public final class Engine implements DialogEngineAPI {
         // An old screen (a newer one has been sent, so the player is about to see
         // it, and closing would close that), or too many clicks: nothing happens.
         if (shown.getOrDefault(player.getUniqueId(), 0L) != drawing || !allowClick(player)) return;
+        Defs.After sentAs = shownAfter.getOrDefault(player.getUniqueId(), def.after());
+        if (sentAs == Defs.After.WAIT_FOR_RESPONSE) clickedWaiting(player);
+        // A seamless dialog stays on the screen, clickable, until the engine
+        // answers. Its other buttons are over: this click decides what comes next.
+        if (sentAs == Defs.After.SEAMLESS) clicks.forget(player.getUniqueId());
         Scope drawnScope = new Scope(this, player, def.id(), session.values, session.untrusted, null, null);
         if (alias != null && !row.isEmpty()) drawnScope = drawnScope.withRow(alias, row);
         if ((button.permission() != null && !player.hasPermission(button.permission())) || !Conditions.test(button.condition(), drawnScope)) {
             Platform.send(player, Text.MM.deserialize(message("no-permission", "<red>You can't do that.")));
-            if (def.after() == Defs.After.WAIT_FOR_RESPONSE) closeUnlessShown(player);
+            answer(player, sentAs);
             return;
         }
 
@@ -534,6 +598,7 @@ public final class Engine implements DialogEngineAPI {
         }
 
         ClickCtx ctx = new ClickCtx(this, player, def, session.with(values, untrusted), button.id(), typed, alias, row);
+        ctx.answering(sentAs);
         List<String> list = new ArrayList<>(button.actions());
         DialogClickEvent event = new DialogClickEvent(ctx, list);
         Bukkit.getPluginManager().callEvent(event);

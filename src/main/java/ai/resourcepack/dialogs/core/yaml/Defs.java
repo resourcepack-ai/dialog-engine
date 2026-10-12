@@ -11,12 +11,40 @@ public final class Defs {
 
     public enum Type { AUTO, NOTICE, CONFIRMATION, MULTI_ACTION, LINKS }
 
-    /** What the screen does once a button is pressed: the game's {@code after_action}. */
+    /**
+     * What the screen does once a button is pressed: the game's
+     * {@code after_action}, and {@link #SEAMLESS}, which the game does not have.
+     */
     public enum After {
-        CLOSE, NONE, WAIT_FOR_RESPONSE;
+        CLOSE, NONE, WAIT_FOR_RESPONSE,
+        /**
+         * Stays on screen exactly as it is until the engine answers the click:
+         * the next dialog takes its place, or the engine closes it. Sent to the
+         * client as {@code none}, so there is no waiting screen in between and
+         * no flash of the world; the engine does the closing {@code close}
+         * would have done.
+         */
+        SEAMLESS;
 
         String json() {
-            return name().toLowerCase(java.util.Locale.ROOT);
+            return this == SEAMLESS ? "none" : name().toLowerCase(java.util.Locale.ROOT);
+        }
+
+        /** Whether something has to answer a click: the engine, since the client will not. */
+        public boolean awaitsAnswer() {
+            return this == WAIT_FOR_RESPONSE || this == SEAMLESS;
+        }
+
+        /** Reads one as written in a dialog or config.yml, or null. */
+        public static After parse(String raw) {
+            if (raw == null) return null;
+            return switch (raw.trim().toLowerCase(java.util.Locale.ROOT).replace('-', '_')) {
+                case "close" -> CLOSE;
+                case "none", "stay" -> NONE;
+                case "wait", "wait_for_response" -> WAIT_FOR_RESPONSE;
+                case "seamless" -> SEAMLESS;
+                default -> null;
+            };
         }
     }
 

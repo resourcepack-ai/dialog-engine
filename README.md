@@ -107,7 +107,7 @@ shop:
   title: "<gold><bold>Shop"
   columns: 2                    # buttons side by side
   escape: true                  # Escape closes it (default true)
-  after: wait                   # wait | close | none, see config.yml
+  after: seamless               # seamless | wait | close | none, see config.yml
   body:
     - "<gray>You have <white>%vault_eco_balance%</white> coins."   # text
     - item: diamond             # an item, with words beside it
@@ -388,13 +388,21 @@ A drawn dialog's clicks (`/de edit`) are the same: each action click works
 once per showing, only while that dialog is on the player's screen, and only
 runs a command that is in its `dialog.yml`.
 
-Under `after: wait` (the default) the client shows a waiting screen until the
-engine answers, so one dialog replaces another with no flash of the world in
-between. The engine always answers: with the next dialog, or by closing the
-screen `close-delay-ticks` after the button's actions have run. A button the
-client handles by itself (`[url]`, `[copy]`, `[suggest]`) never reaches the
-engine, so a dialog with one is shown as `after: close` instead. A drawn
-dialog set to wait in Studio is answered the same way.
+Under `after: seamless` (the default) a dialog stays on the screen exactly as it
+is until the engine answers the click: the next dialog takes its place with
+nothing in between, and when none follows, the engine closes it on the next
+tick. There is no flash of the world and no waiting screen. A button that runs
+a command closes the dialog before the command runs, unless one of its later
+actions opens the next dialog itself, so a screen that command opens (another
+plugin's dialog, a chest) is never closed after it arrives. A button the client
+handles by itself (`[url]`, `[copy]`, `[suggest]`) never reaches the engine and
+leaves the dialog open.
+
+Under `after: wait` the client shows its "Waiting for Server" screen until the
+engine answers: with the next dialog, or by closing the screen
+`close-delay-ticks` after the button's actions have run. A dialog with a
+client-only button is shown as `after: close` instead. A drawn dialog set to
+wait in Studio is answered the same way.
 
 ## Building
 
