@@ -15,6 +15,7 @@ import ai.resourcepack.dialogs.core.click.ClickCtx;
 import ai.resourcepack.dialogs.core.click.Clicks;
 import ai.resourcepack.dialogs.core.command.OpenCommands;
 import ai.resourcepack.dialogs.core.drawn.DrawnDialogs;
+import ai.resourcepack.dialogs.core.drawn.DrawnInstall;
 import ai.resourcepack.dialogs.core.drawn.DrawnPack;
 import ai.resourcepack.dialogs.core.edit.EditSessions;
 import ai.resourcepack.dialogs.core.placeholder.BuiltInLists;
@@ -693,6 +694,29 @@ public final class Engine implements DialogEngineAPI {
         folders.removeIf(f -> ns.equals(f.namespace()));
         folders.add(new Folder(owner, ns, folder));
         load();
+    }
+
+    @Override
+    public boolean installDrawn(Plugin owner, String namespace) {
+        String ns = namespace.toLowerCase(Locale.ROOT);
+        if (!ns.matches("[a-z0-9_.\\-]+") || ns.equals("samples")) throw new IllegalArgumentException("namespace must be a-z, 0-9, _ . - and not samples");
+        boolean changed;
+        try {
+            changed = DrawnInstall.install(owner, ns, new File(drawn.folder(), ns).toPath());
+        } catch (java.io.IOException e) {
+            plugin.getLogger().warning(owner.getName() + "'s drawn dialogs could not be installed: " + e.getMessage());
+            return false;
+        }
+        if (changed) {
+            plugin.getLogger().info("Installed " + owner.getName() + " " + owner.getDescription().getVersion() + "'s drawn dialogs into drawn/" + ns + "/.");
+            reload();
+        }
+        return changed;
+    }
+
+    @Override
+    public Optional<String> setting(Player player, String name) {
+        return drawn.setting(player, name);
     }
 
     @Override
