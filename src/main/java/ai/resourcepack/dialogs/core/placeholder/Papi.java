@@ -24,6 +24,25 @@ public final class Papi {
         }
     }
 
+    /**
+     * One placeholder by its name, {@code vault_eco_balance} for
+     * {@code %vault_eco_balance%}: what PlaceholderAPI answers, or null when it
+     * is not installed or nothing answers (it hands back the placeholder as
+     * written). How a drawn dialog's {@code {name}} reaches it.
+     */
+    public static String lookup(Player viewer, String name) {
+        Method m = method();
+        if (m == null || viewer == null || name == null || name.isEmpty()) return null;
+        String wrapped = "%" + name + "%";
+        try {
+            Object value = m.invoke(null, viewer, wrapped);
+            String text = value == null ? null : value.toString();
+            return text == null || text.equals(wrapped) ? null : text;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+    }
+
     /** Whether PlaceholderAPI is installed, so a fill has to keep typed values away from it. */
     static boolean available() {
         return method() != null;

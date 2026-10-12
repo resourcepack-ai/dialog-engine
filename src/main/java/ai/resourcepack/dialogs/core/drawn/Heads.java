@@ -1,6 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
-import org.bukkit.Bukkit;
+import ai.resourcepack.dialogs.core.platform.Platform;
 
 /**
  * Whether this server's dialogs may carry the {@code player} text component
@@ -13,12 +13,11 @@ final class Heads {
     }
 
     static boolean supported() {
-        // "1.21.8-R0.1-SNAPSHOT" on Spigot and Paper alike (getMinecraftVersion is Paper's alone).
-        String[] parts = Bukkit.getBukkitVersion().split("-")[0].split("[.]");
-        int major = parts.length > 0 ? Integer.parseInt(parts[0]) : 0;
-        int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
-        int patch = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
-        if (major != 1) return major > 1;
-        return minor > 21 || (minor == 21 && patch >= 9);
+        // Read leniently: Paper 26.x says "26.3.build.12-stable", and reading
+        // "build" as a number threw, which the caller takes as "no heads" — so
+        // no face was ever drawn on Paper 26.x before 0.4.2.
+        int[] v = Platform.minecraftVersionNumbers();
+        if (v[0] != 1) return v[0] > 1;
+        return v[1] > 21 || (v[1] == 21 && v[2] >= 9);
     }
 }

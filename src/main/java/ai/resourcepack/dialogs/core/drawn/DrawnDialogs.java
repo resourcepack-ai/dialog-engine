@@ -4,6 +4,7 @@ import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.ClickCtx;
 import ai.resourcepack.dialogs.core.command.OpenCommands;
+import ai.resourcepack.dialogs.core.placeholder.Papi;
 import ai.resourcepack.dialogs.core.placeholder.Scope;
 import ai.resourcepack.dialogs.core.placeholder.Text;
 import ai.resourcepack.dialogs.core.platform.Platform;
@@ -434,7 +435,13 @@ public final class DrawnDialogs {
         return GSON.toJson(JsonParser.parseString(DialogConditions.strip(json, lookup(player, d, values), player::hasPermission)));
     }
 
-    /** What a placeholder or a condition is answered from: what it was opened with, the player's settings, the engine's own values. */
+    /**
+     * What a placeholder or a condition is answered from: what it was opened
+     * with, the player's settings, the engine's own values, and last
+     * PlaceholderAPI, which a YAML dialog's text has always reached through
+     * {@code Text.fill} and a drawn one never did: {@code {vault_eco_balance}}
+     * is {@code %vault_eco_balance%} there, as it is in RP Engine.
+     */
     private Function<String, Optional<String>> lookup(Player player, Drawn d, Map<String, String> values) {
         Map<String, String> given = new HashMap<>();
         values.forEach((k, v) -> given.put(k.toLowerCase(Locale.ROOT), v));
@@ -444,7 +451,9 @@ public final class DrawnDialogs {
             if (mine != null) return Optional.of(mine);
             Optional<String> stored = variables().get(player, name);
             if (stored.isPresent()) return stored;
-            return Optional.ofNullable(scope.lookup(name));
+            String own = scope.lookup(name);
+            if (own != null) return Optional.of(own);
+            return Optional.ofNullable(Papi.lookup(player, name));
         };
         return name -> {
             Optional<String> found = direct.apply(name);

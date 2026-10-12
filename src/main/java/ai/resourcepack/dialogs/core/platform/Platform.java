@@ -101,9 +101,37 @@ public final class Platform {
         return new java.util.HashMap<>();
     }
 
-    /** "1.21.8", from "1.21.8-R0.1-SNAPSHOT" (getMinecraftVersion is Paper's alone). */
+    /**
+     * "1.21.8", from "1.21.8-R0.1-SNAPSHOT" (getMinecraftVersion is Paper's
+     * alone), and "26.3" from Paper 26.x's "26.3.build.12-stable": the numbers
+     * and dots it starts with, up to the first thing that is neither.
+     */
     public static String minecraftVersion() {
-        return Bukkit.getBukkitVersion().split("-")[0];
+        return leadingVersion(Bukkit.getBukkitVersion());
+    }
+
+    /** The release a version string starts with: its leading digits and dots, without a trailing dot. */
+    public static String leadingVersion(String raw) {
+        if (raw == null) return "";
+        int end = 0;
+        while (end < raw.length() && (Character.isDigit(raw.charAt(end)) || raw.charAt(end) == '.')) end++;
+        String out = raw.substring(0, end);
+        while (out.endsWith(".")) out = out.substring(0, out.length() - 1);
+        return out;
+    }
+
+    /** {@link #minecraftVersion()} as numbers: {major, minor, patch}, a part it does not have 0. */
+    public static int[] minecraftVersionNumbers() {
+        String[] parts = minecraftVersion().split("[.]");
+        int[] out = new int[3];
+        for (int i = 0; i < out.length && i < parts.length; i++) {
+            try {
+                out[i] = Integer.parseInt(parts[i]);
+            } catch (NumberFormatException e) {
+                break;
+            }
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ dialogs
