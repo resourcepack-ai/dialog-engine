@@ -19,7 +19,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_background.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_background.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -28,7 +28,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -37,7 +37,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.chat.tile_r0c0.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.chat.tile_r0c0.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -46,7 +46,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.chat.tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.chat.tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -55,7 +55,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.friends.tile_r0c0.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.friends.tile_r0c0.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -64,7 +64,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.friends.tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.friends.tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -73,7 +73,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.audio.tile_r0c0.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.audio.tile_r0c0.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -82,7 +82,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.audio.tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.audio.tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -91,7 +91,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.access.tile_r0c0.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.access.tile_r0c0.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -100,7 +100,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.access.tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.access.tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -109,7 +109,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.controls.tile_r0c0.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.controls.tile_r0c0.png",
       "ascent": 7,
       "height": 198,
       "chars": [
@@ -118,7 +118,7 @@
     },
     {
       "type": "bitmap",
-      "file": "minecraft:font/dialog_samples_social_p.controls.tile_r0c1.png",
+      "file": "rpai:font/dialog_b01d84c2/dialog_samples_social_p.controls.tile_r0c1.png",
       "ascent": 7,
       "height": 198,
       "chars": [

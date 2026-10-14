@@ -5,6 +5,9 @@
     "max_format": 75,
     "description": "Dialog Engine sample: social (Minecraft 1.21.11)"
   },
+  "resourcepack_ai": {
+    "exported": true
+  },
   "overlays": {
     "entries": [
       {
@@ -36,6 +39,15 @@
       },
       {
         "formats": {
+          "min_inclusive": 97,
+          "max_inclusive": 97
+        },
+        "min_format": 97,
+        "max_format": 97,
+        "directory": "rpai_dialog_v97"
+      },
+      {
+        "formats": {
           "min_inclusive": 69,
           "max_inclusive": 75
         },
@@ -60,6 +72,15 @@
         "min_format": 88,
         "max_format": 88,
         "directory": "rpai_head_v88"
+      },
+      {
+        "formats": {
+          "min_inclusive": 97,
+          "max_inclusive": 97
+        },
+        "min_format": 97,
+        "max_format": 97,
+        "directory": "rpai_head_v97"
       }
     ]
   }

@@ -195,6 +195,13 @@ public final class DrawnDialogs {
                     try {
                         DrawnFiles.read(dir.toPath());
                         if (DrawnFiles.stale(dir.toPath())) stale.put(id, dir);
+                        // Drawn before Studio gave a picture its own font (2026-10-14):
+                        // its characters are in minecraft:default, where emoji and HUD
+                        // plugins put theirs too. Redrawn like an edited one, unless a
+                        // plugin's jar brings it (that plugin's next version redraws it).
+                        // An unedited sample was brought up to date from our own jar
+                        // before this, so only an edited one is still here to redraw.
+                        else if (!DrawnInstall.shipped(ns.toPath()) && DrawnFiles.inDefaultFont(dir.toPath())) stale.put(id, dir);
                         Drawn d = read(id, dir, moves.get(ns.getName() + "/" + dir.getName()));
                         if (d != null) dialogs.put(id, d);
                     } catch (Exception e) {

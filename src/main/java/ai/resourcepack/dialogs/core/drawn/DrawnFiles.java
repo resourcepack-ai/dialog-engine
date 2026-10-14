@@ -93,6 +93,21 @@ public final class DrawnFiles {
         Files.writeString(dir.resolve(BUILT), hash(text), StandardCharsets.UTF_8);
     }
 
+    /**
+     * Whether the drawing puts its picture in the shared default font: drawn
+     * before Studio gave every picture a font of its own ({@code rpai:dialog_*}),
+     * so an emoji or HUD plugin's pack can take its characters.
+     */
+    static boolean inDefaultFont(Path dir) {
+        try {
+            Path built = dir.resolve("dialogs.json");
+            if (!Files.isRegularFile(built) || !Files.isRegularFile(dir.resolve("pack/assets/minecraft/font/default.json"))) return false;
+            return !Files.readString(built, StandardCharsets.UTF_8).contains("\"rpai:dialog_");
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** Whether {@code dialog.yml} has changed since the drawing was made. */
     static boolean stale(Path dir) {
         try {

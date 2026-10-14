@@ -57,6 +57,7 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         // The drawn samples (a punishment panel, a settings menu), the same way:
         // Studio's drawings, shipped drawn, so they work without the internet.
         File drawnSamples = new File(getDataFolder(), "drawn/samples");
+        if (getConfig().getBoolean("samples", true) && drawnSamples.exists()) refreshDrawnSamples(drawnSamples);
         if (getConfig().getBoolean("samples", true) && !drawnSamples.exists()) {
             writeDrawnSamples();
             // Its picker, for a server that had the YAML samples before there were drawn ones.
@@ -132,6 +133,61 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         } catch (java.io.IOException e) {
             getLogger().warning("Could not update config.yml: " + e.getMessage());
         }
+    }
+
+    /**
+     * The drawn samples already on disk, brought up to the jar's drawing when
+     * nobody has edited them: a sample whose {@code dialog.yml} is the jar's,
+     * but whose drawing is not, gets the jar's drawing (its old {@code pack/}
+     * taken away first, so nothing from the old drawing is left in the pack).
+     * Written once and never again before 0.4.3, which left every server on the
+     * drawing it first installed, emoji clashes and all.
+     */
+    private void refreshDrawnSamples(File root) {
+        java.util.List<String> files = sampleFiles();
+        java.util.Set<String> names = new java.util.TreeSet<>();
+        for (String f : files) if (f.contains("/")) names.add(f.substring(0, f.indexOf('/')));
+        for (String name : names) {
+            File dir = new File(root, name);
+            try (java.io.InputStream yml = getResource("drawn/samples/" + name + "/dialog.yml");
+                 java.io.InputStream built = getResource("drawn/samples/" + name + "/dialogs.json")) {
+                if (yml == null || built == null || !dir.isDirectory()) continue;
+                String jarYml = new String(yml.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).replace("\r\n", "\n");
+                java.nio.file.Path diskYml = new File(dir, "dialog.yml").toPath();
+                if (!java.nio.file.Files.isRegularFile(diskYml)
+                        || !java.nio.file.Files.readString(diskYml, java.nio.charset.StandardCharsets.UTF_8).replace("\r\n", "\n").equals(jarYml)) {
+                    continue; // Edited: the owner's now.
+                }
+                byte[] jarBuilt = built.readAllBytes();
+                java.nio.file.Path diskBuilt = new File(dir, "dialogs.json").toPath();
+                if (java.nio.file.Files.isRegularFile(diskBuilt) && java.util.Arrays.equals(java.nio.file.Files.readAllBytes(diskBuilt), jarBuilt)) continue;
+                java.nio.file.Path pack = new File(dir, "pack").toPath();
+                if (java.nio.file.Files.isDirectory(pack)) {
+                    try (var walk = java.nio.file.Files.walk(pack)) {
+                        for (java.nio.file.Path p : (Iterable<java.nio.file.Path>) walk.sorted(java.util.Comparator.reverseOrder())::iterator) java.nio.file.Files.delete(p);
+                    }
+                }
+                for (String f : files) if (f.startsWith(name + "/")) saveResource("drawn/samples/" + f, true);
+                getLogger().info("Updated the drawn sample " + name + " to this version's drawing.");
+            } catch (java.io.IOException | IllegalArgumentException e) {
+                getLogger().warning("Could not update the drawn sample " + name + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /** The jar's {@code drawn/samples/files.txt}, one path per line. */
+    private java.util.List<String> sampleFiles() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        try (java.io.InputStream list = getResource("drawn/samples/files.txt")) {
+            if (list == null) return out;
+            for (String line : new String(list.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
+                String name = line.trim();
+                if (!name.isEmpty() && !name.contains("..")) out.add(name);
+            }
+        } catch (java.io.IOException e) {
+            getLogger().warning("Could not read the drawn sample list: " + e.getMessage());
+        }
+        return out;
     }
 
     /** Every file listed in the jar's {@code drawn/samples/files.txt}. */
