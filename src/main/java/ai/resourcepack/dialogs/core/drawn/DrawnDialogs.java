@@ -91,7 +91,7 @@ public final class DrawnDialogs {
      */
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
-                 Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds) {
+                 Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds, Map<String, Integer> itemIcons) {
 
         /** What a click on this page waits for: what has to answer it. */
         Defs.After answering(String page) {
@@ -142,6 +142,25 @@ public final class DrawnDialogs {
 
     public DrawnDialogs(Engine engine) {
         this.engine = engine;
+    }
+
+    /**
+     * The player's items in a drawn dialog's live slots, and moving them: RP
+     * Engine's own code, compiled in (DialogSlots, DialogItems). Made on first
+     * use, once the engine has its plugin.
+     */
+    private DialogSlots slots;
+
+    private DialogSlots slots() {
+        if (slots == null) slots = new DialogSlots(engine.plugin());
+        return slots;
+    }
+
+    /** A drawn dialog's id as RP Engine's slot code keys it. */
+    private static ContentId contentId(String id) {
+        return ContentId.parse(id.toLowerCase(Locale.ROOT))
+                .or(() -> ContentId.parse("drawn:" + id.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_")))
+                .orElseThrow();
     }
 
     /** Players' settings, kept on the player; made on first use, once the engine has its plugin. */
@@ -204,6 +223,7 @@ public final class DrawnDialogs {
         List<List<String>> actions = new ArrayList<>();
         List<String> refused = new ArrayList<>();
         Map<String, JsonObject> written = new LinkedHashMap<>();
+        Map<String, Integer> itemIcons = new HashMap<>();
         String first = null;
         for (JsonElement e : list) {
             JsonObject page = e.getAsJsonObject();
@@ -221,6 +241,15 @@ public final class DrawnDialogs {
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
             pages.put(studioId, GSON.toJson(rewritten));
             written.put(studioId, page);
+            // The pack's own items' cells in its item sheet, by model id: what a
+            // live slot draws one of the pack's items as (RP Engine's itemIcons).
+            if (page.get("itemIcons") instanceof JsonObject icons) {
+                for (Map.Entry<String, JsonElement> icon : icons.entrySet()) {
+                    if (icon.getValue().isJsonPrimitive() && icon.getValue().getAsJsonPrimitive().isNumber()) {
+                        itemIcons.put(icon.getKey(), icon.getValue().getAsInt());
+                    }
+                }
+            }
             if (page.has("vars")) {
                 for (JsonElement v : page.getAsJsonArray("vars")) {
                     Set<String> values = vars.computeIfAbsent(v.getAsJsonObject().get("name").getAsString(), k -> new LinkedHashSet<>());
@@ -251,7 +280,7 @@ public final class DrawnDialogs {
             if (s != null) sounds.put(studioId, s);
         });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
-                Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds));
+                Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds), Map.copyOf(itemIcons));
     }
 
     /** A sound event as a server takes one; Studio's {@code CLICK_SOUND_EVENT} is the same rule. */
@@ -397,8 +426,17 @@ public final class DrawnDialogs {
         RANDOM.nextBytes(bytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         json = ACT_CLICK.matcher(json).replaceAll("$1 " + nonce + "\"");
+        Shown before = lastShown.get(player.getUniqueId());
         json = filled(player, d, json, session.values);
         json = DialogBars.fill(json);
+        // The player's own items into the live slots, after the placeholders and
+        // bars, as RP Engine does: a slot reached by a page turn or a move keeps
+        // what was picked up.
+        if (DialogItems.perPlayer(json)) {
+            ContentId cid = contentId(d.id);
+            slots().shown(player, cid, before != null && before.drawn.equals(d.id));
+            json = DialogItems.fill(json, slots().reader(player), slots().held(player, cid).orElse(null), d.itemIcons);
+        }
         boolean permitted = d.permission == null || player.hasPermission(d.permission);
         lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json));
         if (Platform.showJson(player, json, engine.plugin().getLogger())) {
@@ -449,6 +487,11 @@ public final class DrawnDialogs {
         Function<String, Optional<String>> direct = name -> {
             String mine = given.get(name.toLowerCase(Locale.ROOT));
             if (mine != null) return Optional.of(mine);
+            // RP Engine's built-ins ({level}, {xp_points}, {health}, ...) and then
+            // PlaceholderAPI, in RP Engine's order, so a drawn dialog reads the
+            // same on both plugins.
+            Optional<String> builtIn = Placeholders.lookup(player, name, null);
+            if (builtIn.isPresent()) return builtIn;
             Optional<String> stored = variables().get(player, name);
             if (stored.isPresent()) return stored;
             String own = scope.lookup(name);
@@ -521,6 +564,15 @@ public final class DrawnDialogs {
             variables().set(player, name, value);
             String page = args.length >= 4 ? args[3].toLowerCase(Locale.ROOT) : shown.page;
             Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
+        } else if (args[0].equalsIgnoreCase("slot") && args.length == 2) {
+            // A live slot's click: picks a stack up or puts it down (RP Engine's
+            // DialogSlots), then the page again with the items where they now are.
+            Optional<DialogSlots.Key> key = DialogSlots.Key.parse(args[1]);
+            if (key.isEmpty()) return;
+            Bukkit.getScheduler().runTask(engine.plugin(), () -> {
+                slots().click(player, contentId(d.id), key.get());
+                showPage(player, d, shown.page, shown.session);
+            });
         } else if (act) {
             int n;
             try {
@@ -621,6 +673,7 @@ public final class DrawnDialogs {
 
     public void forget(Player player) {
         lastShown.remove(player.getUniqueId());
+        if (slots != null) slots.forget(player);
     }
 
     /**
@@ -630,6 +683,7 @@ public final class DrawnDialogs {
      */
     public void retire(Player player) {
         lastShown.computeIfPresent(player.getUniqueId(), (k, s) -> s.live ? s.retired() : s);
+        if (slots != null) slots.forget(player);
     }
 
     // ------------------------------------------------------------------ commands

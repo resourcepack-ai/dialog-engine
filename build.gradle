@@ -103,8 +103,17 @@ processResources {
 // the two plugins cannot drift: the same placeholder pass, the same list rows,
 // bars, "show when" conditions and packet route. Only the package, one version
 // check and the name a warning is logged under are rewritten.
-def engineDialogs = file('../rp-engine/src/main/java/ai/resourcepack/engine/core/dialog')
-def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions']
+def engineRoot = file('../rp-engine/src/main/java/ai/resourcepack/engine')
+def engineDialogs = file("${engineRoot}/core/dialog")
+def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions',
+                     // The player's inventory in a drawn dialog: its items drawn in the
+                     // slots, their tooltips, and moving them (rp slot).
+                     'DialogItems', 'DialogItemIcons', 'DialogItemModels', 'DialogSlots']
+// What those need from the rest of RP Engine, copied in beside them: the
+// built-in placeholders ({level}, {xp_points}, ...), the item storage a
+// container is kept in, and the three API types the slots name. In this
+// package they are internal; nothing here is Dialog Engine's public API.
+def sharedOther = ['core/font/Placeholders', 'core/storage/ItemBytes', 'api/ContentId', 'api/DialogContainer', 'api/event/DialogSlotMoveEvent']
 def generatedDialogs = layout.buildDirectory.dir('generated/rpe-dialogs')
 
 // A Copy with nothing to copy is skipped rather than failed, which would leave
@@ -123,10 +132,17 @@ tasks.register('copyEngineDialogs', Copy) {
     from(engineDialogs) {
         include sharedDialogs.collect { "${it}.java" }
     }
+    from(engineRoot) {
+        include sharedOther.collect { "${it}.java" }
+        eachFile { it.path = it.name }
+    }
+    includeEmptyDirs = false
     into generatedDialogs.map { it.dir('ai/resourcepack/dialogs/core/drawn') }
     filter { String line ->
         if (line.startsWith('import ai.resourcepack.engine.')) return ''
-        line.replace('package ai.resourcepack.engine.core.dialog;', 'package ai.resourcepack.dialogs.core.drawn;')
+        line.replaceAll('^package ai[.]resourcepack[.]engine[a-z.]*;', 'package ai.resourcepack.dialogs.core.drawn;')
+            .replace('ai.resourcepack.engine.core.version.Vanilla.maxHealth().orElse(null)', 'org.bukkit.attribute.Attribute.MAX_HEALTH')
+            .replace('{@link ai.resourcepack.engine.api.DialogInfo#itemIcons()}', 'the item icons')
             .replace('McVersion.parse(Compatibility.readServerVersion()).map(Feature.TEXT_OBJECTS::on).orElse(false)', 'Heads.supported()')
             .replace('{@link Feature#TEXT_OBJECTS}', 'the 1.21.9 player text component')
             .replace('Logger.getLogger("RPEngine")', 'Logger.getLogger("DialogEngine")')
@@ -141,6 +157,11 @@ tasks.register('copyEngineDialogs', Copy) {
         def text = file("${generatedDialogs.get().asFile}/ai/resourcepack/dialogs/core/drawn/DialogPlaceholders.java").text
         if (text.contains('McVersion') || text.contains('Compatibility')) {
             throw new GradleException('RP Engine\'s DialogPlaceholders changed how it asks the server version; update copyEngineDialogs.')
+        }
+        file("${generatedDialogs.get().asFile}/ai/resourcepack/dialogs/core/drawn").listFiles().each { f ->
+            if (f.text.contains('ai.resourcepack.engine.')) {
+                throw new GradleException("RP Engine's ${f.name} names another part of RP Engine (ai.resourcepack.engine.*); update copyEngineDialogs.")
+            }
         }
     }
 }
