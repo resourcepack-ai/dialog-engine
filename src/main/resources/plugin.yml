@@ -31,6 +31,7 @@ permissions:
       dialogengine.pack.notify: true
       dialogengine.samples: true
       dialogengine.update: true
+      dialogengine.shaders: true
   dialogengine.list:
     description: /de list, every dialog on the server and its command.
     default: op
@@ -60,4 +61,7 @@ permissions:
     default: op
   dialogengine.update:
     description: Be told on joining when a newer Dialog Engine is on SpigotMC.
+    default: op
+  dialogengine.shaders:
+    description: Be told when the drawn dialog pack's text shader was merged with another plugin's, or clashes with one.
     default: op

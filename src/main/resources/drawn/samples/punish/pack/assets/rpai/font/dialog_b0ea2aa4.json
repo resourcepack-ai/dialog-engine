@@ -9,7 +9,7 @@
     },
     {
       "type": "bitmap",
-      "file": "rpai:font/dialog_b1c05598/dialog_samples_punish_background.png",
+      "file": "rpai:font/dialog_b0ea2aa4/dialog_samples_punish_background.png",
       "ascent": 7,
       "height": 133,
       "chars": [
@@ -18,7 +18,7 @@
     },
     {
       "type": "bitmap",
-      "file": "rpai:font/dialog_b1c05598/dialog_samples_punish_tile_r0c1.png",
+      "file": "rpai:font/dialog_b0ea2aa4/dialog_samples_punish_tile_r0c1.png",
       "ascent": 7,
       "height": 133,
       "chars": [

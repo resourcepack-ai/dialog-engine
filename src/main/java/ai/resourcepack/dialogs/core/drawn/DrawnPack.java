@@ -1,5 +1,7 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.common.shader.ShaderClashes;
+import ai.resourcepack.common.shader.ShaderWatch;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.placeholder.Text;
 import ai.resourcepack.dialogs.core.platform.Platform;
@@ -65,8 +67,77 @@ public final class DrawnPack {
     /** Players sent the pack since they joined, whatever they made of it so far. */
     private final java.util.Set<UUID> offered = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    /** What our pack's label is, in what the shader merge says. */
+    private static final String LABEL = "Dialog Engine's drawn dialog pack";
+    /** The oldest pack format this plugin runs on: 1.21.7's. Nothing older is merged for. */
+    private static final int MIN_FORMAT = 64;
+
+    /** Other plugins' core shaders, and the text shader merged into this pack. See {@link ShaderWatch}. */
+    private ShaderWatch shaders;
+    /** Whether the pack as built carries another plugin's text shader merged in, so has to land above theirs. */
+    private boolean merged;
+    /** Where the last build read the drawings from, for a rebuild when the other plugins' packs change. */
+    private File lastRoot;
+
     public DrawnPack(Engine engine) {
         this.engine = engine;
+    }
+
+    /** Made on first use: the engine makes this before it has its plugin. */
+    private synchronized ShaderWatch shaders() {
+        if (shaders != null) return shaders;
+        shaders = new ShaderWatch(engine.plugin(), new ShaderWatch.Host() {
+            @Override
+            public String displayName() {
+                return "Dialog Engine";
+            }
+
+            @Override
+            public String permission() {
+                return "dialogengine.shaders";
+            }
+
+            @Override
+            public boolean mergeEnabled() {
+                return engine.plugin().getConfig().getBoolean("shaders.merge", true);
+            }
+
+            @Override
+            public boolean notifyPlayers() {
+                return engine.plugin().getConfig().getBoolean("shaders.notify-players", true);
+            }
+
+            @Override
+            public void say(Player player, String line) {
+                Engine.tell(player, "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>"
+                        + Text.MM.escapeTags(line));
+            }
+        });
+        return shaders;
+    }
+
+    /**
+     * Reads the other plugins' packs again a while after startup, and builds
+     * this one again if what they hold changed: a plugin that builds its pack
+     * as it enables (after this one) may have changed it since the first read.
+     */
+    public void watchLater(long delayTicks) {
+        shaders().scanLater(delayTicks, changed -> {
+            if (changed && lastRoot != null) {
+                build(lastRoot);
+                sendAll();
+            }
+        });
+    }
+
+    /** Whether the pack carries another plugin's text shader merged in, so must reach a player after theirs. */
+    public boolean merged() {
+        return merged && zip != null;
+    }
+
+    /** Tells a player who has just joined what was merged and what clashes, if they may hear it. */
+    public void tellOnJoin(Player player) {
+        shaders().onJoin(player);
     }
 
     private org.bukkit.configuration.ConfigurationSection cfg() {
@@ -76,6 +147,10 @@ public final class DrawnPack {
 
     /** Builds the zip from every drawn dialog's {@code pack/} folder. Null when there is nothing to draw. */
     public void build(File drawnRoot) {
+        lastRoot = drawnRoot;
+        // Before anything is built: another plugin's text shader is merged into
+        // this pack, so a player is sent this one pack and nothing after it.
+        shaders().scanNow();
         Map<String, byte[]> files = new TreeMap<>();
         JsonArray overlays = new JsonArray();
         int format = 0;
@@ -152,10 +227,17 @@ public final class DrawnPack {
             meta.add("overlays", o);
         }
         files.put("pack.mcmeta", meta.toString().getBytes(StandardCharsets.UTF_8));
+        // A drawn dialog's live player heads replace the game's text shader,
+        // as a HUD plugin's pack (BetterHud's) often does too, and a client
+        // keeps one copy. Merged into this pack where it can be, said where not.
+        Map<String, byte[]> withMerge = shaders().merge(LABEL, files, MIN_FORMAT).orElse(null);
+        merged = withMerge != null;
+        Map<String, byte[]> zipped = merged ? withMerge : files;
+        shaders().check(Map.of(LABEL, ShaderClashes.inFiles(zipped)));
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (ZipOutputStream out = new ZipOutputStream(bytes)) {
-                for (var entry : files.entrySet()) {
+                for (var entry : zipped.entrySet()) {
                     ZipEntry z = new ZipEntry(entry.getKey());
                     z.setTime(0);
                     out.putNextEntry(z);
@@ -414,6 +496,28 @@ public final class DrawnPack {
             return false;
         }
         return true;
+    }
+
+    /** Whether this player has been sent it since they joined. */
+    public boolean sentTo(Player player) {
+        return offered.contains(player.getUniqueId());
+    }
+
+    /**
+     * Takes it off a player and sends it again, so it lands on top of
+     * whatever they hold now. For after another plugin's pack reached them: a
+     * plugin that sends with {@code setResourcePack} (BetterHud does) takes
+     * every other pack off the player first, and one that stacks lands above.
+     * Cached by the client, so a reload rather than a download.
+     */
+    public boolean resend(Player player) {
+        if (zip == null || !offered.contains(player.getUniqueId())) return false;
+        try {
+            player.removeResourcePack(PACK_ID);
+        } catch (RuntimeException e) {
+            // Nothing to take off: send it anyway.
+        }
+        return send(player);
     }
 
     /** After a rebuild: everybody, or (samples only) whoever has it already. */

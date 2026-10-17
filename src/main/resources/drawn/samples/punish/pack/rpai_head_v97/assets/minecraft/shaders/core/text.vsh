@@ -38,6 +38,17 @@ void rpe_head_vertex_main() {
     texCoord0 = UV0;
 }
 
+// rpai-merge:begin vertex-vanilla v1
+// #include <minecraft:dynamictransforms.glsl>
+// #include <minecraft:projection.glsl>
+// layout(location = 0) in vec3 Position;
+// layout(location = 1) in vec4 Color;
+// layout(location = 2) in vec2 UV0;
+// layout(location = 2) out vec4 vertexColor;
+// layout(location = 3) out vec2 texCoord0;
+// rpai-merge:end vertex-vanilla
+// rpai-merge:begin vertex-epilogue v1
+// rpai-merge:renames main rpe_head_vertex_main
 void main() {
     rpe_head_vertex_main();
 
@@ -57,3 +68,4 @@ void main() {
         }
     }
 }
+// rpai-merge:end vertex-epilogue

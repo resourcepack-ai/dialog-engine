@@ -103,6 +103,16 @@ pack:
   url: ""
   prompt: "<gray>This server's menus are drawn with a small resource pack."
 
+# A drawn dialog's live player heads replace the game's text shader, and so do
+# some HUD plugins' packs (BetterHud's). A player's game keeps only one copy, so
+# with merge on, Dialog Engine combines the other plugin's into the drawn pack
+# so both draw. The console says what was combined, and what could not be.
+shaders:
+  merge: true
+  # Also say it in chat to players with dialogengine.shaders (ops), when it
+  # happens and when they join. False keeps it to the console.
+  notify-players: true
+
 # Which version of this file it is, so an update can move a setting whose
 # default changed. Leave it alone.
-config-version: 2
+config-version: 3

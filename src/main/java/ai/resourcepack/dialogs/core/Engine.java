@@ -192,9 +192,62 @@ public final class Engine implements DialogEngineAPI {
         drawn.click(player, args);
     }
 
+    /**
+     * The longest a join waits for another plugin's pack before sending ours
+     * anyway: three seconds. Only when ours carries that plugin's text shader
+     * merged in, which only works with ours above theirs. A plugin that sends
+     * with {@code setResourcePack} (BetterHud) takes every pack off the player
+     * first, so ours sent after theirs is one loading screen where ours sent
+     * first is ours wiped and sent again.
+     */
+    private static final long OTHERS_WAIT_TICKS = 60L;
+
+    /** Players whose join waits for another plugin's pack to reach them first. */
+    private final java.util.Set<UUID> awaitingOthers = ConcurrentHashMap.newKeySet();
+    /** Per player, the other plugins' packs ours have already been sent again above. */
+    private final Map<UUID, java.util.Set<UUID>> raisedOver = new ConcurrentHashMap<>();
+
     /** Sends the drawn dialog pack to a player joining, when there is one they should have. */
     public void sendDrawnPack(Player player) {
-        if (drawnPack.onJoin()) drawnPack.send(player);
+        drawnPack.tellOnJoin(player);
+        if (!drawnPack.onJoin()) return;
+        if (drawnPack.merged()) {
+            awaitingOthers.add(player.getUniqueId());
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                // The same session: a rejoin inside the wait has a wait of its own.
+                if (plugin.getServer().getPlayer(player.getUniqueId()) == player
+                        && awaitingOthers.remove(player.getUniqueId())) drawnPack.send(player);
+            }, OTHERS_WAIT_TICKS);
+            return;
+        }
+        drawnPack.send(player);
+    }
+
+    /**
+     * Another plugin's pack reached a player. If ours was waiting for it,
+     * ours goes now, on top. If ours went first, it goes again, on top, once
+     * per pack per player so two plugins doing the same cannot take turns
+     * forever; never for another plugin of ours, which stacks beside it and
+     * never takes it off.
+     */
+    private void otherPack(Player player, UUID pack, String status) {
+        if (!status.equals("ACCEPTED") || pack == null
+                || ai.resourcepack.common.shader.SiblingPacks.fromSibling(plugin, pack)) {
+            return;
+        }
+        if (!raisedOver.computeIfAbsent(player.getUniqueId(), k -> ConcurrentHashMap.newKeySet()).add(pack)) return;
+        if (awaitingOthers.remove(player.getUniqueId())) {
+            drawnPack.send(player);
+            return;
+        }
+        if (drawnPack.sentTo(player)) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (player.isOnline() && drawnPack.resend(player)) {
+                    plugin.getLogger().info("Another plugin sent " + player.getName() + " a resource pack after the drawn"
+                            + " dialog pack, so it was sent again, on top of it.");
+                }
+            });
+        }
     }
 
     /** Drawn dialogs waiting for their pack to reach a player. */
@@ -206,7 +259,10 @@ public final class Engine implements DialogEngineAPI {
      * not download says so, and the next one opened offers the pack again.
      */
     public void packStatus(Player player, UUID pack, String status) {
-        if (!DrawnPack.isPack(pack)) return;
+        if (!DrawnPack.isPack(pack)) {
+            otherPack(player, pack, status);
+            return;
+        }
         switch (status) {
             case "SUCCESSFULLY_LOADED" -> {
                 Runnable open = waitingForPack.remove(player.getUniqueId());
@@ -334,6 +390,8 @@ public final class Engine implements DialogEngineAPI {
     public void forget(Player player) {
         drawn.forget(player);
         drawnPack.forget(player);
+        awaitingOthers.remove(player.getUniqueId());
+        raisedOver.remove(player.getUniqueId());
         waitingForPack.remove(player.getUniqueId());
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());

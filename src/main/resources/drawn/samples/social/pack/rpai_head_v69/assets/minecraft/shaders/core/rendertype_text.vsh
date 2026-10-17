@@ -25,6 +25,22 @@ void rpe_head_vertex_main() {
     texCoord0 = UV0;
 }
 
+// rpai-merge:begin vertex-vanilla v1
+// #moj_import <minecraft:fog.glsl>
+// #moj_import <minecraft:dynamictransforms.glsl>
+// #moj_import <minecraft:projection.glsl>
+// in vec3 Position;
+// in vec4 Color;
+// in vec2 UV0;
+// in ivec2 UV2;
+// uniform sampler2D Sampler2;
+// out float sphericalVertexDistance;
+// out float cylindricalVertexDistance;
+// out vec4 vertexColor;
+// out vec2 texCoord0;
+// rpai-merge:end vertex-vanilla
+// rpai-merge:begin vertex-epilogue v1
+// rpai-merge:renames main rpe_head_vertex_main
 void main() {
     rpe_head_vertex_main();
 
@@ -44,3 +60,4 @@ void main() {
         }
     }
 }
+// rpai-merge:end vertex-epilogue

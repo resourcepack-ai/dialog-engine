@@ -66,6 +66,12 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
         engine.load();
         DialogEngine.set(engine);
+        // Another plugin of ours (RP Engine) does not send its packs again over
+        // this one's, which it would otherwise take for a stranger's.
+        ai.resourcepack.common.shader.SiblingPacks.register(this, ai.resourcepack.dialogs.core.drawn.DrawnPack::isPack);
+        // The other plugins' packs are read before every build; once more a
+        // while after startup, for a plugin that builds its own as it enables.
+        engine.drawnPack.watchLater(20L * 20);
 
         PluginCommand click = getCommand("dialogclick");
         if (click != null) {
@@ -117,20 +123,47 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         File file = new File(getDataFolder(), "config.yml");
         try {
             String text = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
-            if (java.util.regex.Pattern.compile("(?m)^config-version:").matcher(text).find()) return;
             String eol = text.contains("\r\n") ? "\r\n" : "\n";
-            String moved = text.replaceFirst("(?m)^default-after:[ \\t]*[\"']?wait[\"']?[ \\t]*(?=\\r?$)", "default-after: seamless");
-            String out = moved + (moved.endsWith("\n") ? "" : eol) + eol
-                    + "# Which version of this file it is, so an update can move a setting whose" + eol
-                    + "# default changed. Leave it alone." + eol
-                    + "config-version: 2" + eol;
-            java.nio.file.Files.writeString(file.toPath(), out, java.nio.charset.StandardCharsets.UTF_8);
-            if (!moved.equals(text)) {
-                getLogger().info("config.yml: default-after is now seamless, the new default (a dialog stays on screen"
-                        + " until the next one replaces it, with no waiting screen). Set it back to wait for the old behaviour.");
+            String out = text;
+            java.util.regex.Matcher version = java.util.regex.Pattern.compile("(?m)^config-version:[ \\t]*(\\d+)").matcher(text);
+            int from = version.find() ? Integer.parseInt(version.group(1)) : 1;
+            if (from < 2) {
+                String moved = out.replaceFirst("(?m)^default-after:[ \\t]*[\"']?wait[\"']?[ \\t]*(?=\\r?$)", "default-after: seamless");
+                if (!moved.equals(out)) {
+                    getLogger().info("config.yml: default-after is now seamless, the new default (a dialog stays on screen"
+                            + " until the next one replaces it, with no waiting screen). Set it back to wait for the old behaviour.");
+                }
+                out = moved + (moved.endsWith("\n") ? "" : eol) + eol
+                        + "# Which version of this file it is, so an update can move a setting whose" + eol
+                        + "# default changed. Leave it alone." + eol
+                        + "config-version: 2" + eol;
             }
+            if (from < 3) {
+                // Version 3 (0.5.0): shaders.merge and shaders.notify-players. New
+                // settings, so a file that already has the section keeps it.
+                if (!java.util.regex.Pattern.compile("(?m)^shaders:").matcher(out).find()) {
+                    String section = String.join(eol,
+                            "# A drawn dialog's live player heads replace the game's text shader, and so do",
+                            "# some HUD plugins' packs (BetterHud's). A player's game keeps only one copy, so",
+                            "# with merge on, Dialog Engine combines the other plugin's into the drawn pack",
+                            "# so both draw. The console says what was combined, and what could not be.",
+                            "shaders:",
+                            "  merge: true",
+                            "  # Also say it in chat to players with dialogengine.shaders (ops), when it",
+                            "  # happens and when they join. False keeps it to the console.",
+                            "  notify-players: true",
+                            "", "");
+                    java.util.regex.Matcher marker = java.util.regex.Pattern
+                            .compile("(?m)^# Which version of this file it is").matcher(out);
+                    out = marker.find() ? out.substring(0, marker.start()) + section + out.substring(marker.start())
+                            : out + (out.endsWith("\n") ? "" : eol) + eol + section;
+                }
+                out = out.replaceFirst("(?m)^config-version:[ \\t]*\\d+", "config-version: 3");
+            }
+            if (out.equals(text)) return;
+            java.nio.file.Files.writeString(file.toPath(), out, java.nio.charset.StandardCharsets.UTF_8);
             reloadConfig();
-        } catch (java.io.IOException e) {
+        } catch (java.io.IOException | RuntimeException e) {
             getLogger().warning("Could not update config.yml: " + e.getMessage());
         }
     }
