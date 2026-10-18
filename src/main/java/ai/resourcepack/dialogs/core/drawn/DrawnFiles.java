@@ -160,11 +160,30 @@ public final class DrawnFiles {
         }
         Files.writeString(dir.resolve("dialogs.json"), GSON.toJson(pull.dialog.built));
         if (writeSource) {
-            write(dir, pull.dialog.spec);
+            write(dir, keepServerKeys(dir, pull.dialog.spec));
         } else {
             // Drawn from the file as it stands: record that, and leave the file (comments and all) alone.
             Files.writeString(dir.resolve(BUILT), hash(Files.readString(dir.resolve(SOURCE), StandardCharsets.UTF_8)));
         }
+    }
+
+    /** Keys of dialog.yml that are this server's, not the drawing's: Studio does not send them, so a Send keeps them. */
+    private static final List<String> SERVER_KEYS = List.of("quickAction", "quick-action");
+
+    private static Map<String, Object> keepServerKeys(Path dir, Map<String, Object> spec) {
+        if (spec == null) return null;
+        Map<String, Object> old;
+        try {
+            old = read(dir);
+        } catch (IOException | RuntimeException e) {
+            return spec;
+        }
+        if (old == null) return spec;
+        Map<String, Object> out = new LinkedHashMap<>(spec);
+        for (String k : SERVER_KEYS) {
+            if (!out.containsKey(k) && old.containsKey(k)) out.put(k, old.get(k));
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ commands

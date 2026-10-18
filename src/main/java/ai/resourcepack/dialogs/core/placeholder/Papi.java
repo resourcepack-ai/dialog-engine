@@ -18,7 +18,7 @@ public final class Papi {
         Method m = method();
         if (m == null) return text;
         try {
-            return (String) m.invoke(null, viewer, text);
+            return (String) m.invoke(null, who(viewer), text);
         } catch (ReflectiveOperationException | RuntimeException e) {
             return text;
         }
@@ -35,12 +35,21 @@ public final class Papi {
         if (m == null || viewer == null || name == null || name.isEmpty()) return null;
         String wrapped = "%" + name + "%";
         try {
-            Object value = m.invoke(null, viewer, wrapped);
+            Object value = m.invoke(null, who(viewer), wrapped);
             String text = value == null ? null : value.toString();
             return text == null || text.equals(wrapped) ? null : text;
         } catch (ReflectiveOperationException | RuntimeException e) {
             return null;
         }
+    }
+
+    /**
+     * Who PlaceholderAPI is asked about: a joining player's stand-in is handed
+     * over as the offline player it stands in for, which expansions know how
+     * to answer, rather than as a Player with nothing behind it.
+     */
+    private static OfflinePlayer who(Player viewer) {
+        return ai.resourcepack.common.quick.StandIn.forPlaceholders(viewer);
     }
 
     /** Whether PlaceholderAPI is installed, so a fill has to keep typed values away from it. */

@@ -19,6 +19,7 @@ import ai.resourcepack.dialogs.core.drawn.DrawnInstall;
 import ai.resourcepack.dialogs.core.drawn.DrawnPack;
 import ai.resourcepack.dialogs.core.edit.EditSessions;
 import ai.resourcepack.dialogs.core.placeholder.BuiltInLists;
+import ai.resourcepack.dialogs.core.quick.QuickActions;
 import ai.resourcepack.dialogs.core.placeholder.Conditions;
 import ai.resourcepack.dialogs.core.placeholder.Papi;
 import ai.resourcepack.dialogs.core.placeholder.Scope;
@@ -179,6 +180,9 @@ public final class Engine implements DialogEngineAPI {
         for (String p : drawn.problems) plugin.getLogger().warning(p);
         drawnPack.build(drawn.folder());
         drawn.redrawStale();
+        List<DialogDef> all = new ArrayList<>(dialogs.values());
+        for (String id : drawn.ids()) drawn.get(id).ifPresent(d -> all.add(d.def()));
+        quick.load(all);
         return problems;
     }
 
@@ -186,6 +190,8 @@ public final class Engine implements DialogEngineAPI {
     public final DrawnDialogs drawn = new DrawnDialogs(this);
     /** The pack they are drawn with. */
     public final DrawnPack drawnPack = new DrawnPack(this);
+    /** The Quick Actions key (G): which dialogs are on it, and each joining player's copies. */
+    public final QuickActions quick = new QuickActions(this);
 
     /** {@code /dialogclick}: what a drawn dialog's clicks run. */
     public void drawnClick(Player player, String[] args) {
@@ -323,6 +329,10 @@ public final class Engine implements DialogEngineAPI {
         return plugin;
     }
 
+    public Renderer renderer() {
+        return renderer;
+    }
+
     public Clicks clicks() {
         return clicks;
     }
@@ -380,6 +390,7 @@ public final class Engine implements DialogEngineAPI {
 
     public void shutdown() {
         if (edits != null) edits.shutdown();
+        quick.shutdown();
         drawn.shutdown();
         drawnPack.stop();
         commands.clear();
@@ -399,6 +410,7 @@ public final class Engine implements DialogEngineAPI {
         onWaitingScreen.remove(player.getUniqueId());
         clickRate.remove(player.getUniqueId());
         clicks.forget(player.getUniqueId());
+        quick.forget(player.getUniqueId());
     }
 
     /** Closes the player's dialog, and with it every button it had. */
@@ -409,7 +421,7 @@ public final class Engine implements DialogEngineAPI {
         // "Waiting for Server" until its Back button woke, five seconds after the
         // click. A container close takes away whatever screen the client has.
         if (onWaitingScreen.remove(player.getUniqueId())) Platform.closeScreen(player);
-        clicks.forget(player.getUniqueId());
+        clicks.forgetScreen(player.getUniqueId());
         drawn.retire(player);
     }
 
@@ -498,7 +510,7 @@ public final class Engine implements DialogEngineAPI {
             shownAfter.remove(player.getUniqueId());
             onWaitingScreen.remove(player.getUniqueId());
             // The YAML dialog it replaced is gone from the screen, and its buttons with it.
-            clicks.forget(player.getUniqueId());
+            clicks.forgetScreen(player.getUniqueId());
             return true;
         }
         DialogDef def = dialogs.get(session.dialogId);
@@ -585,12 +597,15 @@ public final class Engine implements DialogEngineAPI {
         if (!player.isOnline() || !player.getUniqueId().equals(session.viewer)) return;
         // An old screen (a newer one has been sent, so the player is about to see
         // it, and closing would close that), or too many clicks: nothing happens.
-        if (shown.getOrDefault(player.getUniqueId(), 0L) != drawing || !allowClick(player)) return;
-        Defs.After sentAs = shownAfter.getOrDefault(player.getUniqueId(), def.after());
+        // A pinned drawing (below zero) is the player's own copy of a quick
+        // action, which the key opens without telling us: never an old screen.
+        if ((drawing >= 0 && shown.getOrDefault(player.getUniqueId(), 0L) != drawing) || !allowClick(player)) return;
+        Defs.After sentAs = drawing < 0 ? quick.sentAs(player.getUniqueId(), drawing, def.after())
+                : shownAfter.getOrDefault(player.getUniqueId(), def.after());
         if (sentAs == Defs.After.WAIT_FOR_RESPONSE) clickedWaiting(player);
         // A seamless dialog stays on the screen, clickable, until the engine
         // answers. Its other buttons are over: this click decides what comes next.
-        if (sentAs == Defs.After.SEAMLESS) clicks.forget(player.getUniqueId());
+        if (sentAs == Defs.After.SEAMLESS) clicks.forgetScreen(player.getUniqueId());
         Scope drawnScope = new Scope(this, player, def.id(), session.values, session.untrusted, null, null);
         if (alias != null && !row.isEmpty()) drawnScope = drawnScope.withRow(alias, row);
         if ((button.permission() != null && !player.hasPermission(button.permission())) || !Conditions.test(button.condition(), drawnScope)) {

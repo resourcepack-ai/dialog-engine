@@ -213,6 +213,22 @@ public final class DrawnDialogs {
         registerCommands();
     }
 
+    /**
+     * {@code quickAction:} (or {@code quick-action:}) in dialog.yml: true, a
+     * mode, or a map with {@code label}. A drawn dialog is always behind the
+     * launcher, whatever mode it asks for: its picture is glyphs in the pack,
+     * which reaches a player when a drawn dialog first opens, and a copy the
+     * key opened before that would be a screen of missing boxes.
+     */
+    private static Defs.QuickAction quickAction(Map<String, Object> spec, String id) {
+        if (spec == null) return null;
+        Object q = spec.containsKey("quickAction") ? spec.get("quickAction") : spec.get("quick-action");
+        if (q == null || Boolean.FALSE.equals(q) || "false".equals(q)) return null;
+        String label = q instanceof Map<?, ?> m && m.get("label") instanceof String l ? l
+                : spec.get("title") instanceof String t ? t : null;
+        return new Defs.QuickAction(true, label);
+    }
+
     /** {@code move}: the characters this dialog's picture was moved to ({@link DrawnGlyphs}), or null. */
     private Drawn read(String id, File dir, Map<Integer, Integer> move) throws Exception {
         File built = new File(dir, "dialogs.json");
@@ -278,7 +294,7 @@ public final class DrawnDialogs {
         String ns = id.substring(0, id.indexOf(':'));
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
-                Map.of(), command, List.of(), permission, List.of(), null, null, Map.of());
+                Map.of(), command, List.of(), permission, List.of(), null, null, Map.of(), quickAction(spec, id));
         // Once every page is rewritten: a sound's command is found among the
         // actions all of them made.
         Map<String, PageSounds> sounds = new LinkedHashMap<>();

@@ -93,7 +93,13 @@ shop:
         - "[close]"
   exit:                         # the button Escape also presses
     label: "Close"
+  quick-action: true            # the Quick Actions key (G) opens it (optional)
 ```
+
+`quick-action: true` puts a dialog on the Quick Actions key (G). Each player's
+copy is drawn as they join and is not redrawn, so do not use it for a dialog
+whose values change while they play: use `quick-action: launcher`, which has G
+open a button that opens the dialog fresh. A change takes a server restart.
 
 ### Body
 

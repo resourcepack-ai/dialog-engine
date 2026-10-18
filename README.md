@@ -132,7 +132,17 @@ shop:
         - "[close]"
   exit:                         # the button Escape also presses
     label: "Close"
+  quick-action: true            # the Quick Actions key (G) opens it (optional)
 ```
+
+`quick-action:` puts a dialog on Minecraft's Quick Actions key (G, 1.21.6+).
+`true` (or `direct`) has G open the dialog itself, drawn for each player as
+they joined, so its values show what was true then until they join again (Paper
+only). `launcher` has G open a one-button screen that asks the server for the
+dialog, drawn fresh. A section takes `mode:` and `label:`, the name in the key's
+list. The key is read from a datapack (`world/datapacks/dialogengine_quick`), so
+a change takes a restart. A dialog with a `permission:`, a `json:` dialog, a
+drawn dialog and anything on Spigot use the launcher.
 
 ### Body
 

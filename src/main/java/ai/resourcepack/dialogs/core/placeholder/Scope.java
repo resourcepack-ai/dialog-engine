@@ -64,6 +64,16 @@ public final class Scope implements DialogContext {
     }
 
     private String builtIn(String key) {
+        try {
+            return builtInOf(key);
+        } catch (RuntimeException e) {
+            // A joining player's stand-in (core/quick) is in no world yet: what
+            // needs one draws as nothing.
+            return "";
+        }
+    }
+
+    private String builtInOf(String key) {
         return switch (key) {
             case "player", "player_name" -> viewer.getName();
             case "player_uuid" -> viewer.getUniqueId().toString();

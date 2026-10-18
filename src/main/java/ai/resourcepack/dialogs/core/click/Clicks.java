@@ -38,6 +38,13 @@ public final class Clicks {
 
     /** The custom click id every Dialog Engine button sends. */
     static final String ID = "dialogengine:click";
+    /**
+     * What a quick-action launcher's button sends, with {@link #QUICK_DIALOG}
+     * naming the dialog to open. No token: the launcher is the same file for
+     * everybody, so the server re-checks everything as it opens the dialog.
+     */
+    public static final String QUICK_ID = "dialogengine:quick";
+    public static final String QUICK_DIALOG = "dialog";
     /** Where the token rides in the payload, beside the inputs. Loader keeps inputs off this key. */
     public static final String TOKEN = "dialogengine_click";
 
@@ -50,7 +57,17 @@ public final class Clicks {
         Float number(String key);
     }
 
-    private record Bound(UUID player, long drawing, long expires, BiConsumer<Player, Payload> action) {}
+    /**
+     * A drawing numbered below zero is PINNED: a player's own copy of a
+     * quick-action dialog, which the Quick Actions key can open at any moment
+     * without the server hearing of it. So no newer screen retires its
+     * buttons, and they last until the player leaves.
+     */
+    private record Bound(UUID player, long drawing, long expires, BiConsumer<Player, Payload> action) {
+        boolean pinned() {
+            return drawing < 0;
+        }
+    }
 
     private final Map<String, Bound> bound = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
@@ -65,13 +82,14 @@ public final class Clicks {
         byte[] bytes = new byte[12];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        bound.put(token, new Bound(player.getUniqueId(), drawing, System.currentTimeMillis() + lifetime.toMillis(), action));
+        long expires = drawing < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + lifetime.toMillis();
+        bound.put(token, new Bound(player.getUniqueId(), drawing, expires, action));
         return token;
     }
 
     /** Drops every token of the player's except drawing {@code keep}'s: a new screen replaced the old one. */
     public void retire(UUID player, long keep) {
-        bound.values().removeIf(b -> b.player.equals(player) && b.drawing != keep);
+        bound.values().removeIf(b -> b.player.equals(player) && b.drawing != keep && !b.pinned());
     }
 
     /** The action JSON a button carries. */
@@ -90,8 +108,26 @@ public final class Clicks {
         if (close != null) onFailure = close;
     }
 
+    /** Every button of the player's, pinned ones included: they left. */
     public void forget(UUID player) {
         bound.values().removeIf(b -> b.player.equals(player));
+    }
+
+    /** The buttons of whatever screen the player had, leaving their pinned quick actions. */
+    public void forgetScreen(UUID player) {
+        bound.values().removeIf(b -> b.player.equals(player) && !b.pinned());
+    }
+
+    /** The player's pinned quick actions only: about to be drawn again. */
+    public void forgetPinned(UUID player) {
+        bound.values().removeIf(b -> b.player.equals(player) && b.pinned());
+    }
+
+    private BiConsumer<Player, String> quick;
+
+    /** What a launcher's press does: handed the player and the dialog it names. */
+    public void onQuick(BiConsumer<Player, String> open) {
+        quick = open;
     }
 
     public void clear() {
@@ -104,6 +140,11 @@ public final class Clicks {
     }
 
     private void handle(Player player, String id, Payload payload) {
+        if (player != null && QUICK_ID.equals(id)) {
+            String dialog = payload.text(QUICK_DIALOG);
+            if (dialog != null && quick != null) quick.accept(player, dialog);
+            return;
+        }
         if (player == null || !ID.equals(id)) return;
         String token = payload.text(TOKEN);
         if (token == null) return;
@@ -119,7 +160,7 @@ public final class Clicks {
             // Said out loud and answered: under "wait" the player is looking at
             // "Waiting for Server", and nothing else is going to take it away.
             plugin.getLogger().log(Level.WARNING, "A button press by " + player.getName() + " failed", e);
-            forget(player.getUniqueId());
+            forgetScreen(player.getUniqueId());
             onFailure.accept(player);
         }
     }
@@ -173,7 +214,7 @@ public final class Clicks {
             Object key = call(event, "getIdentifier");
             if (key == null) return;
             String id = (String) call(key, "asString");
-            if (!ID.equals(id)) return;
+            if (!ID.equals(id) && !QUICK_ID.equals(id)) return;
             Object connection = call(event, "getCommonConnection");
             Method getPlayer = method(connection.getClass(), "getPlayer");
             if (getPlayer == null) return;

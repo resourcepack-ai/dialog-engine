@@ -199,7 +199,37 @@ public final class Loader {
                 List.copyOf(s.getStringList("args")),
                 ifMissing,
                 json,
-                Collections.unmodifiableMap(defaults));
+                Collections.unmodifiableMap(defaults),
+                quickAction(s, source, id));
+    }
+
+    /**
+     * {@code quick-action: true} (or {@code direct}), {@code launcher}, or a
+     * section with {@code mode:} and {@code label:}. Absent or false: not on
+     * the key.
+     */
+    private Defs.QuickAction quickAction(ConfigurationSection s, String source, String id) {
+        String mode;
+        String label = null;
+        if (s.isConfigurationSection("quick-action")) {
+            ConfigurationSection q = s.getConfigurationSection("quick-action");
+            mode = q.getString("mode", "direct");
+            label = q.getString("label");
+        } else if (s.isBoolean("quick-action")) {
+            return s.getBoolean("quick-action") ? new Defs.QuickAction(false, null) : null;
+        } else {
+            mode = s.getString("quick-action");
+            if (mode == null) return null;
+        }
+        return switch (mode.toLowerCase(Locale.ROOT).trim()) {
+            case "direct", "true", "yes", "on" -> new Defs.QuickAction(false, label);
+            case "launcher" -> new Defs.QuickAction(true, label);
+            case "false", "no", "off", "" -> null;
+            default -> {
+                problems.add(source + ": " + id + " quick-action '" + mode + "' is not direct or launcher; it is direct");
+                yield new Defs.QuickAction(false, label);
+            }
+        };
     }
 
     private static ConfigurationSection first(ConfigurationSection s, String... keys) {

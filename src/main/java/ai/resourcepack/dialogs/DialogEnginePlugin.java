@@ -255,6 +255,13 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         engine.packStatus(event.getPlayer(), event.getID(), event.getStatus().name());
     }
 
+    /** Last, and only for a login that is going ahead: the player's own copies of the Quick Actions key's dialogs. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onPreLogin(org.bukkit.event.player.AsyncPlayerPreLoginEvent event) {
+        if (event.getLoginResult() != org.bukkit.event.player.AsyncPlayerPreLoginEvent.Result.ALLOWED) return;
+        engine.quick.prepare(event.getUniqueId(), event.getName());
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         engine.forget(event.getPlayer());

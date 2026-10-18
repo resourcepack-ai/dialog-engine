@@ -72,7 +72,18 @@ public final class Defs {
             List<String> args,
             String ifMissing,
             String json,
-            Map<String, String> defaults) {
+            Map<String, String> defaults,
+            QuickAction quick) {
+    }
+
+    /**
+     * {@code quick-action:}, the dialog on the game's Quick Actions key (G).
+     * {@code launcher}: the key opens a one-button screen that asks the server
+     * for the dialog, drawn fresh. Otherwise the key opens the dialog itself,
+     * drawn for the player as they joined (see {@code core/quick}).
+     * {@code label}: what the key's list and the launcher call it.
+     */
+    public record QuickAction(boolean launcher, String label) {
     }
 
     enum BodyKind { TEXT, ITEM }

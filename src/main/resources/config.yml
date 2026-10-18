@@ -76,6 +76,9 @@ messages:
   pack-loading: "<gray>Loading this menu's resource pack..."
   pack-declined: "<red>This menu is drawn with a resource pack, and you declined it."
   pack-failed: "<red>This menu's resource pack could not be loaded."
+  # The button on a quick action's launcher: what the Quick Actions key (G)
+  # opens for a dialog with quick-action: launcher.
+  quick-open: "Open"
 
 # /de edit <id> draws a dialog in the dialog editor at resourcepack.ai, in the
 # browser, with no account. Pressing "Send to server" there writes it into
