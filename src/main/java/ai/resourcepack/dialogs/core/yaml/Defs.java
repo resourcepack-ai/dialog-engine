@@ -1,8 +1,12 @@
 package ai.resourcepack.dialogs.core.yaml;
 
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /** A dialog as written, before any placeholder is filled. Immutable; rebuilt on reload. */
 public final class Defs {
@@ -97,6 +101,7 @@ public final class Defs {
             String name,
             List<String> lore,
             String model,
+            ModelData modelData,
             int amount,
             boolean glow,
             boolean tooltip,
@@ -106,6 +111,79 @@ public final class Defs {
             String description,
             String condition,
             ForEach forEach) {
+    }
+
+    /**
+     * A body item's {@code custom-model-data:} as written: every value kept as
+     * text, so a {placeholder} in it is filled for the player before it is
+     * read. {@code auto} is the shorthand, a value or a list of them, each a
+     * float, a flag or a string by what it says once filled; the other four are
+     * the game's own lists, given by name.
+     */
+    record ModelData(List<String> auto, List<String> floats, List<String> flags, List<String> strings, List<String> colors) {
+
+        static final ModelData NONE = new ModelData(List.of(), List.of(), List.of(), List.of(), List.of());
+
+        /**
+         * The {@code minecraft:custom_model_data} component, with what does not
+         * read as its list's kind left out — or null when nothing is left, so a
+         * value a placeholder emptied sends no component at all.
+         */
+        JsonObject json(UnaryOperator<String> fill) {
+            JsonArray f = new JsonArray();
+            JsonArray b = new JsonArray();
+            JsonArray s = new JsonArray();
+            JsonArray c = new JsonArray();
+            for (String raw : auto) {
+                String v = fill.apply(raw).trim();
+                Double n = number(v);
+                if (n != null) f.add(n);
+                else if (v.equalsIgnoreCase("true") || v.equalsIgnoreCase("false")) b.add(Boolean.parseBoolean(v));
+                else if (!v.isEmpty()) s.add(v);
+            }
+            for (String raw : floats) {
+                Double n = number(fill.apply(raw).trim());
+                if (n != null) f.add(n);
+            }
+            for (String raw : flags) {
+                String v = fill.apply(raw).trim();
+                if (v.equalsIgnoreCase("true") || v.equalsIgnoreCase("false")) b.add(Boolean.parseBoolean(v));
+            }
+            for (String raw : strings) {
+                String v = fill.apply(raw);
+                if (!v.isEmpty()) s.add(v);
+            }
+            for (String raw : colors) {
+                Integer rgb = color(fill.apply(raw).trim());
+                if (rgb != null) c.add(rgb);
+            }
+            JsonObject out = new JsonObject();
+            if (!f.isEmpty()) out.add("floats", f);
+            if (!b.isEmpty()) out.add("flags", b);
+            if (!s.isEmpty()) out.add("strings", s);
+            if (!c.isEmpty()) out.add("colors", c);
+            return out.isEmpty() ? null : out;
+        }
+
+        private static Double number(String v) {
+            if (v.isEmpty()) return null;
+            try {
+                double d = Double.parseDouble(v);
+                return Double.isFinite(d) ? d : null;
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        /** An RGB colour, {@code #rrggbb} or a number up to 0xFFFFFF. */
+        private static Integer color(String v) {
+            try {
+                int rgb = v.startsWith("#") && v.length() == 7 ? Integer.parseInt(v.substring(1), 16) : Integer.parseInt(v);
+                return rgb >= 0 && rgb <= 0xFFFFFF ? rgb : null;
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
     }
 
     public enum InputKind { TEXT, OPTIONS, TOGGLE, SLIDER }

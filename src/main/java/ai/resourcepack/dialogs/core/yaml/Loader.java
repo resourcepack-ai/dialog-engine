@@ -304,7 +304,7 @@ public final class Loader {
 
     private BodyDef body(Object raw, String source, String id) {
         if (raw instanceof String text) {
-            return new BodyDef(BodyKind.TEXT, text, 200, null, null, null, List.of(), null, 1, false, true, true, 16, 16, null, null, null);
+            return new BodyDef(BodyKind.TEXT, text, 200, null, null, null, List.of(), null, Defs.ModelData.NONE, 1, false, true, true, 16, 16, null, null, null);
         }
         if (!(raw instanceof Map<?, ?> map)) return null;
         ConfigurationSection b = section(map);
@@ -315,6 +315,7 @@ public final class Loader {
                     b.getString("name"),
                     b.getStringList("lore"),
                     b.getString("model"),
+                    modelData(b),
                     Math.max(1, Math.min(99, b.getInt("amount", 1))),
                     b.getBoolean("glow", false),
                     b.getBoolean("tooltip", true),
@@ -330,7 +331,7 @@ public final class Loader {
             problems.add(source + ": " + id + " has a body entry with neither text: nor item:");
             return null;
         }
-        return new BodyDef(BodyKind.TEXT, text, clamp(b.getInt("width", 200), 1, 1024), null, null, null, List.of(), null,
+        return new BodyDef(BodyKind.TEXT, text, clamp(b.getInt("width", 200), 1, 1024), null, null, null, List.of(), null, Defs.ModelData.NONE,
                 1, false, true, true, 16, 16, null, condition(b), forEach(b));
     }
 
@@ -425,6 +426,31 @@ public final class Loader {
         String list = s.getString("for-each", s.getString("foreach"));
         if (list == null || list.isBlank()) return null;
         return new ForEach(list.trim(), s.getString("as", "row"), Math.max(0, s.getInt("per-page", 0)), Math.max(0, s.getInt("limit", 0)));
+    }
+
+    /**
+     * An item's {@code custom-model-data:}: a value or a list of them (each a
+     * float, a flag or a string by what it says), or the game's own lists by
+     * name — {@code floats}, {@code flags}, {@code strings}, {@code colors}.
+     */
+    static Defs.ModelData modelData(ConfigurationSection b) {
+        String key = "custom-model-data";
+        if (!b.contains(key)) return Defs.ModelData.NONE;
+        if (b.isConfigurationSection(key)) {
+            ConfigurationSection d = b.getConfigurationSection(key);
+            return new Defs.ModelData(List.of(), texts(d, "floats"), texts(d, "flags"), texts(d, "strings"), texts(d, "colors"));
+        }
+        return new Defs.ModelData(texts(b, key), List.of(), List.of(), List.of(), List.of());
+    }
+
+    /** A key's values as text, one or a list of them: a number, a word or a {placeholder} alike. */
+    private static List<String> texts(ConfigurationSection s, String key) {
+        if (s.isList(key)) {
+            List<?> values = s.getList(key);
+            return values == null ? List.of() : values.stream().filter(java.util.Objects::nonNull).map(String::valueOf).toList();
+        }
+        Object v = s.get(key);
+        return v == null || v instanceof ConfigurationSection ? List.of() : List.of(String.valueOf(v));
     }
 
     private static String joined(ConfigurationSection s, String key) {

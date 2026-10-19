@@ -281,6 +281,8 @@ public final class Renderer {
             NamespacedKey key = NamespacedKey.fromString(Text.fill(b.model(), s, Text.Mode.RAW).trim().toLowerCase(Locale.ROOT));
             if (key != null) components.addProperty("minecraft:item_model", key.toString());
         }
+        JsonObject modelData = b.modelData().json(v -> Text.fill(v, s, Text.Mode.RAW));
+        if (modelData != null) components.add("minecraft:custom_model_data", modelData);
         if (b.glow()) components.addProperty("minecraft:enchantment_glint_override", true);
         if (b.head() != null && material == Material.PLAYER_HEAD) {
             JsonObject profile = profile(Text.fill(b.head(), s, Text.Mode.RAW).trim());

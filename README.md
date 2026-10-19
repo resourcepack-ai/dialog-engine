@@ -151,10 +151,33 @@ A body entry is a string (text), or a map:
 | Key | |
 |---|---|
 | `text:` | MiniMessage; a list is several lines. `width:` 1-1024, default 200 |
-| `item:` | An item id, drawn with `description:` beside it. Also `name:`, `lore:`, `amount:`, `model:` (an item model id), `glow:`, `tooltip:` (hover shows it), `decorations:` (count and bar), `width:`/`height:` 1-256 |
+| `item:` | An item id, drawn with `description:` beside it. Also `name:`, `lore:`, `amount:`, `model:` (an item model id), `custom-model-data:`, `glow:`, `tooltip:` (hover shows it), `decorations:` (count and bar), `width:`/`height:` 1-256 |
 | `head:` | A player's name: the item is their head (`item:` defaults to `player_head`) |
 | `if:` | Only drawn when this holds (see Conditions) |
 | `for-each:` | Drawn once per row of a list (see Lists) |
+
+An item from your server's own resource pack (ItemsAdder, Nexo, Oraxen or a
+pack of your own) is drawn as itself by `model:` and `custom-model-data:`, the
+same components the plugin gives the real item:
+
+```yaml
+body:
+  - item: paper
+    name: "<red>Ruby"
+    model: nexo:ruby            # its item model
+  - item: paper
+    custom-model-data: 1001     # a plugin's custom model data number
+  - item: paper
+    custom-model-data:          # or the game's own lists, by name
+      floats: [1001]
+      strings: ["{gem}"]
+      flags: [true]
+      colors: ["#ff5555"]
+```
+
+A single value, or a list of them, becomes a float, a flag (`true`/`false`) or a
+string by what it says. Placeholders are filled first, so one can pick the model
+per player.
 
 ### Inputs
 
