@@ -210,7 +210,34 @@ public final class DrawnDialogs {
                 }
             }
         }
+        unknownOpens();
         registerCommands();
+    }
+
+    /** {@code [open] <id>} or {@code [dialog] <id>}, the id first. */
+    private static final Pattern OPEN_ACTION = Pattern.compile("^\\[(?:open|dialog)]\\s+(\\S+).*$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /**
+     * A click that opens a dialog this plugin has none called, said as the
+     * dialogs load rather than to the first player who presses it. Only once
+     * every drawn dialog is in, so one may open another drawn after it. An id
+     * holding a placeholder is somebody's words, not a typo, and is passed over.
+     */
+    private void unknownOpens() {
+        for (Drawn d : dialogs.values()) {
+            Set<String> said = new LinkedHashSet<>();
+            for (List<String> list : d.actions) {
+                for (String action : list) {
+                    Matcher m = OPEN_ACTION.matcher(action.trim());
+                    if (!m.matches()) continue;
+                    String target = m.group(1);
+                    if (target.contains("{") || target.contains("%") || target.contains("$(")) continue;
+                    if (engine.has(engine.resolve(target, d.def.namespace())) || !said.add(target)) continue;
+                    problems.add("drawn/" + d.id.replace(':', '/') + ": a click opens \"" + target
+                            + "\", which is none of Dialog Engine's dialogs (see /de list); pressing it says so");
+                }
+            }
+        }
     }
 
     /**
@@ -248,6 +275,7 @@ public final class DrawnDialogs {
         Map<String, JsonObject> written = new LinkedHashMap<>();
         Map<String, Integer> itemIcons = new HashMap<>();
         String first = null;
+        String ns = id.substring(0, id.indexOf(':'));
         for (JsonElement e : list) {
             JsonObject page = e.getAsJsonObject();
             String studioId = "studio:" + page.get("id").getAsString();
@@ -260,7 +288,7 @@ public final class DrawnDialogs {
                 if ("none".equals(a.getAsString())) (closes ? seamless : staysUp).add(studioId);
                 else if ("wait_for_response".equals(a.getAsString())) waits.add(studioId);
             }
-            JsonElement rewritten = rewrite(json, actions, allowed, refused);
+            JsonElement rewritten = rewrite(json, actions, allowed, refused, link -> opensHere(link, ns));
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
             pages.put(studioId, GSON.toJson(rewritten));
             written.put(studioId, page);
@@ -291,7 +319,6 @@ public final class DrawnDialogs {
             if (spec.get("command") instanceof String c && !c.isBlank()) command = c.replaceFirst("^/", "").toLowerCase(Locale.ROOT);
             if (spec.get("commandPermission") instanceof String c && !c.isBlank()) permission = c;
         }
-        String ns = id.substring(0, id.indexOf(':'));
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
                 Map.of(), command, List.of(), permission, List.of(), null, null, Map.of(), quickAction(spec, id));
@@ -359,17 +386,71 @@ public final class DrawnDialogs {
         return Pattern.compile(pattern.toString(), Pattern.DOTALL).matcher(bare).matches();
     }
 
+    /** A dialog id a {@code show_dialog} click may name, to be opened by this plugin: a resource location. */
+    private static final Pattern DIALOG_ID = Pattern.compile("(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+");
+
+    /**
+     * Whether a {@code show_dialog} click naming {@code link}, in a dialog in
+     * {@code namespace}, is one of this plugin's to open: Studio's own ids
+     * ({@code studio:<x>}, resolved when clicked by {@link Engine#resolve}), and
+     * any id that is one of our dialogs. The drawn ones are asked of the folder,
+     * since they are still loading.
+     */
+    private boolean opensHere(String link, String namespace) {
+        if (link.startsWith("studio:")) return true;
+        String id = link.contains(":") ? link : namespace + ":" + link;
+        if (engine.has(id)) return true;
+        int colon = id.indexOf(':');
+        return new File(new File(new File(folder(), id.substring(0, colon)), id.substring(colon + 1)), "dialogs.json").isFile();
+    }
+
+    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused) {
+        return rewrite(e, actions, allowed, refused, link -> false);
+    }
+
     /**
      * Every command a click runs, as this plugin's: RP Engine's page, var and
      * slot clicks as {@code /dialogclick page|var|slot}, and anything else as
      * {@code /dialogclick act <n>}, its actions kept in {@code actions}. A
      * command not in {@code allowed} (see {@link DrawnFiles#commands}) gets no
      * actions, and is named in {@code refused}.
+     *
+     * <p>A click that opens another dialog BY ID ({@code show_dialog}, a body
+     * click or a footer button) is ours too when {@code ours} says the id is:
+     * {@code /dialogclick act <n>} running {@code [open] <id>}. Left to the
+     * client, an id is a lookup in the server's dialog registry, which has
+     * none of this plugin's dialogs, and the game refuses the WHOLE dialog
+     * holding such a click, not just the click. Studio writes one whenever
+     * "Open another dialog" names a dialog that was not drawn in the same
+     * session, which in a {@code /de edit} is every other one. An id that is
+     * not ours is left as written: the registry may well have it.
      */
-    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused) {
+    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused,
+                               java.util.function.Predicate<String> ours) {
         if (e instanceof JsonArray a) {
-            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions, allowed, refused));
+            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions, allowed, refused, ours));
         } else if (e instanceof JsonObject o) {
+            boolean bodyOpens = o.get("action") instanceof JsonPrimitive act && "show_dialog".equals(act.getAsString());
+            boolean buttonOpens = o.get("type") instanceof JsonPrimitive type
+                    && ("minecraft:show_dialog".equals(type.getAsString()) || "show_dialog".equals(type.getAsString()));
+            if ((bodyOpens || buttonOpens) && o.get("dialog") instanceof JsonPrimitive target && target.isString()) {
+                String link = target.getAsString().trim().toLowerCase(Locale.ROOT);
+                if (DIALOG_ID.matcher(link).matches() && ours.test(link)) {
+                    List<String> list = List.of("[open] " + link);
+                    int n = actions.indexOf(list);
+                    if (n < 0) {
+                        n = actions.size();
+                        actions.add(list);
+                    }
+                    // In place, so the keys keep their order: picture() reads
+                    // "action":"run_command","command": as written.
+                    if (bodyOpens) o.addProperty("action", "run_command");
+                    else o.addProperty("type", "minecraft:run_command");
+                    o.remove("dialog");
+                    o.addProperty("command", CLICK + " act " + n);
+                    return e;
+                }
+            }
             boolean runs = (o.has("action") && o.get("action").isJsonPrimitive() && "run_command".equals(o.get("action").getAsString()))
                     || (o.has("type") && o.get("type").isJsonPrimitive() && "minecraft:run_command".equals(o.get("type").getAsString()));
             if (runs && o.has("command") && o.get("command").isJsonPrimitive()) {
@@ -392,7 +473,7 @@ public final class DrawnDialogs {
                     o.addProperty("command", slash + CLICK + " act " + n);
                 }
             }
-            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions, allowed, refused));
+            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions, allowed, refused, ours));
         }
         return e;
     }
@@ -416,6 +497,14 @@ public final class DrawnDialogs {
 
     public Optional<Drawn> get(String id) {
         return Optional.ofNullable(dialogs.get(id.toLowerCase(Locale.ROOT)));
+    }
+
+    /** The drawn dialog whose first page Studio calls {@code studioId} ({@code studio:<x>}), if there is one. */
+    public Optional<String> byStudioId(String studioId) {
+        for (Drawn d : dialogs.values()) {
+            if (d.first.equals(studioId)) return Optional.of(d.id);
+        }
+        return Optional.empty();
     }
 
     // ------------------------------------------------------------------ showing

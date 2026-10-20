@@ -167,7 +167,7 @@ public final class ClickCtx implements ClickContext {
 
     @Override
     public void open(String dialogId, Map<String, String> extra) {
-        String id = engine.qualify(dialogId, def.namespace());
+        String id = engine.resolve(dialogId, def.namespace());
         Map<String, String> values = new LinkedHashMap<>(session.values);
         Set<String> untrusted = new HashSet<>(session.untrusted);
         values.remove("error");
@@ -185,7 +185,7 @@ public final class ClickCtx implements ClickContext {
 
     /** {@link #open} for {@code [open]}, where a value may have come from a player's words. */
     void open(String dialogId, Map<String, String> extra, Set<String> untrustedExtra) {
-        String id = engine.qualify(dialogId, def.namespace());
+        String id = engine.resolve(dialogId, def.namespace());
         Map<String, String> values = new LinkedHashMap<>(session.values);
         Set<String> untrusted = new HashSet<>(session.untrusted);
         values.remove("error");

@@ -380,6 +380,30 @@ public final class Engine implements DialogEngineAPI {
         return namespace + ":" + trimmed;
     }
 
+    /** Whether this plugin has a dialog with exactly this id, YAML or drawn. */
+    public boolean has(String id) {
+        return dialogs.containsKey(id) || drawn.has(id);
+    }
+
+    /**
+     * The dialog a click asks to open, from a dialog in {@code namespace}:
+     * {@link #qualify}, and for Studio's {@code studio:<x>}, which is what
+     * Studio's "Open another dialog" writes, the dialog of ours that is. First
+     * the drawn dialog whose first page Studio calls that (a {@code /de edit}
+     * of {@code shop:main} is {@code studio:shop_main}), then {@code <x>} beside
+     * the one clicked, since a name typed into the editor means a dialog next
+     * to it. Anything else is the qualified id as it was.
+     */
+    public String resolve(String id, String namespace) {
+        String qualified = qualify(id, namespace);
+        if (has(qualified) || !qualified.startsWith("studio:")) return qualified;
+        String rest = qualified.substring("studio:".length());
+        Optional<String> drawnId = drawn.byStudioId(qualified);
+        if (drawnId.isPresent()) return drawnId.get();
+        if (namespace != null && has(namespace + ":" + rest)) return namespace + ":" + rest;
+        return qualified;
+    }
+
     private EditSessions edits;
 
     /** {@code /de edit}'s sessions, made on first use. */
