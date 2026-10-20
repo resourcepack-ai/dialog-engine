@@ -171,19 +171,71 @@ public final class Platform {
      * codec where it can be reached by name (Paper), otherwise the vanilla
      * command, which carries it inline as SNBT. Returns false, having said why
      * in the log, when neither will take it.
+     *
+     * <p>A dialog the codec READ and refused is not tried as a command: the
+     * command decodes the same SNBT with the same codec against the same
+     * registries, so it can only refuse it again, in words that name the
+     * command rather than the dialog.
      */
     public static boolean showJson(Player player, String json, Logger log) {
         if (DialogPackets.show(player, json)) return true;
-        Optional<String> inline = DialogSnbt.of(json);
-        if (inline.isPresent()) {
-            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:dialog show " + player.getUniqueId() + " " + inline.get());
-        }
         String refusal = DialogPackets.lastRefusal();
-        String why = refusal != null ? refusal
-                : "the server's codec could not be reached and the dialog has text the /dialog command cannot carry (a line break, most likely)";
+        String why;
+        if (refusal != null) {
+            why = refusal;
+        } else {
+            Optional<String> inline = DialogSnbt.of(json);
+            if (inline.isEmpty()) {
+                why = "the server's codec could not be reached and the dialog has text the /dialog command cannot carry (a line break, most likely)";
+            } else {
+                why = dialogCommand(player, "show @s " + inline.get());
+                if (why == null) return true;
+            }
+        }
+        why = explain(why);
         if (log != null) log.warning("Could not show a dialog to " + player.getName() + ": " + why);
         else throw new IllegalStateException(why);
         return false;
+    }
+
+    /**
+     * Runs {@code /dialog <rest>} for one player from the console: null when it
+     * ran, else what the game said was wrong. {@code rest} starts {@code show @s}
+     * or {@code clear @s}.
+     *
+     * <p>The player is {@code @s} under {@code execute as <uuid>}, never named in
+     * {@code /dialog} itself. Not by name: on an offline-mode server a name is
+     * whatever the client said, and one called {@code @a} would show every
+     * dialog to the whole server. Not by UUID either: {@code /dialog} takes
+     * PLAYERS, and the game's parser refuses any UUID for a players-only
+     * argument, because it cannot know at parse time that the entity is a
+     * player ("Only players may be affected by this command, but the provided
+     * selector includes entities"). Written that way this route never opened a
+     * dialog. {@code @s} is the one selector such an argument accepts.
+     */
+    private static String dialogCommand(Player player, String rest) {
+        String command = "minecraft:execute as " + player.getUniqueId() + " run minecraft:dialog " + rest;
+        try {
+            return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command) ? null : "the server did not run /dialog";
+        } catch (RuntimeException e) {
+            // Bukkit wraps the game's refusal in "Unhandled exception executing
+            // '<the whole command>'", which says nothing about the dialog: the
+            // cause is the part worth reading.
+            Throwable root = e;
+            while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+            String message = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+            return message.length() > 300 ? message.substring(0, 300) + "…" : message;
+        }
+    }
+
+    /** The codec's words, plus what they mean when they are about a dialog a click opens. */
+    private static String explain(String why) {
+        int at = why.indexOf("ResourceKey[minecraft:dialog / ");
+        if (at < 0) return why;
+        int end = why.indexOf(']', at);
+        String id = end < 0 ? "" : why.substring(at + "ResourceKey[minecraft:dialog / ".length(), end);
+        return why + " (a click in it opens the dialog " + id + ", which this server does not have, and the game"
+                + " refuses the whole dialog over one such click: point it at one of Dialog Engine's dialogs, or take it out)";
     }
 
     private static final Method CLOSE = closeMethod();
@@ -223,6 +275,6 @@ public final class Platform {
                 // fall through to the command
             }
         }
-        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "minecraft:dialog clear " + player.getUniqueId());
+        dialogCommand(player, "clear @s");
     }
 }
