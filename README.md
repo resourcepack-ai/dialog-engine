@@ -8,7 +8,8 @@ menus on.
 - **Server owners** write dialogs in `plugins/DialogEngine/dialogs/` and give
   them commands, permissions, conditions, lists and actions. No code.
 - **Developers** ship dialogs with their plugin, add their own actions,
-  placeholders and lists, and hear every click as an event.
+  placeholders and lists, and hear every press of a YAML dialog's buttons as an
+  event.
 
 Runs on **Spigot or Paper 1.21.7 or newer**, one jar for both, with players
 on a 1.21.6+ client.
@@ -389,12 +390,18 @@ player, which your plugin reads with `dialogs.setting(player, "name")`. A
 list's rows are values like any other: `warps_3` is row three, `warps_3_note`
 its `note` field and `warps_count` how many there are.
 
+A drawn dialog does not fire `DialogClickEvent`: its pieces are not YAML
+buttons with an `id:`. To answer one in Java, register an action and name it
+in the piece's command. In the editor that is **When clicked** set to **Run
+command**, with `[myplugin:claim] daily` (or several, `[a] ...; [b] ...`).
+A command with no brackets is run by the player, as on any dialog.
+
 ### Events
 
 | Event | |
 |---|---|
 | `DialogOpenEvent` | A dialog is about to be drawn. Cancellable; `values()` can be changed |
-| `DialogClickEvent` | A button was pressed, its inputs passed, its actions not yet run. Cancellable; `getButtonId()`, `getInputs()`, `getActions()` (changeable), and `getContext()` to open, refresh or close |
+| `DialogClickEvent` | A button on a YAML dialog was pressed, its inputs passed, its actions not yet run. Cancellable; `getButtonId()`, `getInputs()`, `getActions()` (changeable), and `getContext()` to open, refresh or close. Not fired by a drawn dialog |
 | `DialogInputErrorEvent` | An input failed its check; the message can be changed |
 | `DialogEngineReloadEvent` | Everything was read again |
 
