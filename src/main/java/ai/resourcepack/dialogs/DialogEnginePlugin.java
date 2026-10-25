@@ -33,6 +33,12 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
     private ai.resourcepack.common.telemetry.Heartbeat heartbeat;
 
     @Override
+    public void onLoad() {
+        // Asked before the worlds load, so the answer is back for the startup banner.
+        ai.resourcepack.common.update.UpdateCheck.early(this, SPIGOT_RESOURCE);
+    }
+
+    @Override
     public void onEnable() {
         engine = new Engine(this);
         String clicks = engine.listenForClicks();
@@ -44,6 +50,22 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         }
         saveDefaultConfig();
         upgradeConfig();
+        ai.resourcepack.common.banner.StartupBanner banner = ai.resourcepack.common.banner.StartupBanner.begin(this)
+                .name("Dialog Engine")
+                .tagline("Minecraft's dialog screens in YAML, with an API.")
+                .docs("https://resourcepack.ai/docs/dialog-engine")
+                .link("Designer", "https://dialogbuilder.dev");
+        if (updates != null) updates.stop();
+        updates = ai.resourcepack.common.update.UpdateCheck.spigot(this, SPIGOT_RESOURCE)
+                .name("Dialog Engine")
+                .permission("dialogengine.update")
+                .enabledWhen(() -> getConfig().getBoolean("update-check", true))
+                .player((player, update) -> Engine.tell(player, "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> "
+                                + "<gray>Dialog Engine <#3670f8>" + update.latest() + "</#3670f8> is out (you have "
+                                + update.running() + "). <#3670f8><u><click:open_url:'" + update.url()
+                                + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>"));
+        // Asked now, so the answer is usually back in time for the banner.
+        banner.updates(updates);
         // The format, written for an AI agent to read. Replaced on every start,
         // so it always describes the version that is running.
         saveResource("AI-GUIDE.md", true);
@@ -88,17 +110,10 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
             de.setTabCompleter(admin);
         }
         getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("Loaded " + engine.ids().size() + " dialogs. Showing them through " + engine.route() + ", clicks through " + clicks + "'s event.");
-
-        updates = ai.resourcepack.common.update.UpdateCheck.spigot(this, SPIGOT_RESOURCE)
-                .name("Dialog Engine")
-                .permission("dialogengine.update")
-                .enabledWhen(() -> getConfig().getBoolean("update-check", true))
-                .player((player, update) -> Engine.tell(player, "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> "
-                                + "<gray>Dialog Engine <#3670f8>" + update.latest() + "</#3670f8> is out (you have "
-                                + update.running() + "). <#3670f8><u><click:open_url:'" + update.url()
-                                + "'><hover:show_text:'" + update.url() + "'>Get it on SpigotMC</hover></click></u>"))
-                .start();
+        banner.ok("Dialogs", engine.ids().size() + (engine.ids().size() == 1 ? " dialog" : " dialogs")
+                + ", shown through " + engine.route());
+        banner.ok("Clicks", clicks + "'s event");
+        updates.start();
 
         // Anonymous usage counting, the only telemetry this plugin has: a
         // random id, the online player count and the names of plugins that
@@ -107,6 +122,7 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
                 .studio(getConfig().getString("edit.url", "https://studio.resourcepack.ai"))
                 .enabledWhen(() -> getConfig().getBoolean("telemetry", true))
                 .start();
+        banner.print();
     }
 
     /**
