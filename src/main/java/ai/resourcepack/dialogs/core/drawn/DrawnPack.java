@@ -1,5 +1,7 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.common.host.PackUploader;
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.shader.ShaderClashes;
 import ai.resourcepack.common.shader.ShaderWatch;
 import ai.resourcepack.dialogs.core.Engine;
@@ -41,8 +43,9 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * The resource pack drawn dialogs are drawn with: every drawn dialog's pack
- * files in one zip, served to players by a small built-in web server, or
- * exported for a server that ships its own pack.
+ * files in one zip, put on ResourcePack AI's pack host (the default,
+ * {@code pack.host: upload}), served to players by a small built-in web server,
+ * or exported for a server that ships its own pack.
  *
  * <p>Sent as an ADDITIONAL pack (1.20.3+), under an id of its own, so it sits
  * beside whatever pack the server already sends rather than replacing it. Only
@@ -57,8 +60,16 @@ public final class DrawnPack {
     private static final UUID PACK_ID = UUID.nameUUIDFromBytes("dialogengine:drawn".getBytes(StandardCharsets.UTF_8));
 
     private final Engine engine;
-    private byte[] zip;
-    private String sha1;
+    private volatile byte[] zip;
+    private volatile String sha1;
+    /** Upload: the SHA-1 of the pack the pack host has, so its link can be sent. */
+    private volatile String hosted;
+    /** Upload: the SHA-1 whose upload failed, which this server serves meanwhile. */
+    private volatile String failed;
+    /** Upload: players a drawn dialog waits on while the pack is still going up; sent it once it is there. */
+    private final java.util.Set<UUID> awaitingUpload = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private java.util.concurrent.ScheduledExecutorService uploads;
+    private PackUploader uploader;
     private Served server;
     private int servedPort = -1;
     private String servedBind;
@@ -252,8 +263,84 @@ public final class DrawnPack {
             sha1 = null;
             engine.plugin().getLogger().warning("Could not build the drawn dialog pack: " + e.getMessage());
         }
+        if (uploading()) {
+            upload();
+            return;
+        }
         // The samples and plugins' alone are not a reason to open a port: that waits for the first one opened.
         if (ownDialogs || server != null) serve();
+    }
+
+    // ------------------------------------------------------------------ the pack host
+
+    /**
+     * How it reaches players: {@code pack.host} when the config says, else
+     * {@code serve} for a server that set {@code public-host} before there was a
+     * choice (it opened a port for this), else {@code upload}.
+     */
+    private boolean uploading() {
+        if (!cfg().getBoolean("send", true) || !cfg().getString("url", "").isBlank()) return false;
+        if (cfg().contains("host", true)) return !cfg().getString("host", "upload").equalsIgnoreCase("serve");
+        return cfg().getString("public-host", "").isBlank();
+    }
+
+    /** Puts the pack as built now on the pack host, off the server thread, then sends it to whoever waits for it. */
+    private synchronized void upload() {
+        byte[] bytes = zip;
+        String sum = sha1;
+        if (bytes == null || sum == null || sum.equals(hosted)) return;
+        if (uploads == null) {
+            uploads = Executors.newSingleThreadScheduledExecutor(daemon("DialogEngine pack upload"));
+            uploader = new PackUploader(PackUploader.HOST, "DialogEngine/" + engine.plugin().getDescription().getVersion());
+            // Keeps the pack on the host, which forgets one nobody has touched for 30 days, and tries a failed upload again.
+            uploads.scheduleWithFixedDelay(() -> {
+                String now = sha1;
+                byte[] current = zip;
+                if (now != null && current != null) ensure(now, current);
+            }, PackUploader.TOUCH_HOURS, PackUploader.TOUCH_HOURS, TimeUnit.HOURS);
+        }
+        uploads.execute(() -> ensure(sum, bytes));
+    }
+
+    private void ensure(String sum, byte[] bytes) {
+        try {
+            uploader.ensure(sum, bytes, "the drawn dialog pack");
+            boolean wasFailing = sum.equals(failed);
+            hosted = sum;
+            if (wasFailing) {
+                failed = null;
+                engine.plugin().getLogger().info("The drawn dialog pack is on packs.resourcepack.ai now: players are sent it from there.");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        } catch (java.io.IOException | RuntimeException e) {
+            if (sum.equals(hosted)) return; // There for weeks yet; the next touch is soon enough.
+            if (!sum.equals(failed)) {
+                failed = sum;
+                engine.plugin().getLogger().warning("Could not put the drawn dialog pack on packs.resourcepack.ai (" + e.getMessage()
+                        + "), so this server serves it on port " + cfg().getInt("port", 8165) + " meanwhile. The upload is tried again every "
+                        + PackUploader.TOUCH_HOURS + " hours.");
+            }
+        }
+        if (!sum.equals(sha1)) return;
+        for (UUID id : java.util.List.copyOf(awaitingUpload)) {
+            Player player = Bukkit.getPlayer(id);
+            awaitingUpload.remove(id);
+            if (player == null) continue;
+            try {
+                Tasks.on(engine.plugin(), player, () -> {
+                    if (player.isOnline() && !send(player)) refusedBeforeSent(player);
+                });
+            } catch (IllegalStateException | IllegalArgumentException disabled) {
+                return;
+            }
+        }
+    }
+
+    /** A player a drawn dialog waited on, who could not be sent the pack after all: they are shown it as it is. */
+    private void refusedBeforeSent(Player player) {
+        engine.packStatus(player, PACK_ID, "FAILED_DOWNLOAD");
     }
 
     /**
@@ -300,8 +387,10 @@ public final class DrawnPack {
 
     // ------------------------------------------------------------------ serving
 
+    /** Whether this server serves the pack itself: serve, or an upload that failed. */
     private boolean hosting() {
-        return cfg().getBoolean("send", true) && cfg().getString("url", "").isBlank();
+        if (!cfg().getBoolean("send", true) || !cfg().getString("url", "").isBlank()) return false;
+        return !uploading() || (sha1 != null && sha1.equals(failed));
     }
 
     /** Downloads served at once; more wait in a short queue, and past that are turned away. */
@@ -339,6 +428,10 @@ public final class DrawnPack {
             servedPort = port;
             servedBind = bind;
             engine.plugin().getLogger().info("Serving the drawn dialog pack on port " + port + " as " + url());
+            if (cfg().getString("public-host", "").isBlank() && Bukkit.getIp().isBlank()) {
+                engine.plugin().getLogger().warning("pack.public-host is blank, so players are sent 127.0.0.1, which only works for a player on this "
+                        + "machine. Set public-host, or set pack.host to upload.");
+            }
         } catch (IOException | RuntimeException e) {
             server = null;
             engine.plugin().getLogger().warning("Could not serve the drawn dialog pack on port " + port + ": " + e.getMessage()
@@ -443,6 +536,7 @@ public final class DrawnPack {
     public String url() {
         String configured = cfg().getString("url", "");
         if (!configured.isBlank()) return configured;
+        if (uploading() && sha1 != null && sha1.equals(hosted)) return PackUploader.HOST + "/h/" + sha1 + ".zip";
         String host = cfg().getString("public-host", "");
         if (host.isBlank()) host = Bukkit.getIp().isBlank() ? "127.0.0.1" : Bukkit.getIp();
         return "http://" + host + ":" + cfg().getInt("port", 8165) + "/drawn-" + sha1 + ".zip";
@@ -483,6 +577,13 @@ public final class DrawnPack {
      */
     public boolean send(Player player) {
         if (zip == null || !cfg().getBoolean("send", true)) return false;
+        if (uploading() && !sha1.equals(hosted) && !sha1.equals(failed)) {
+            // Still going up: sent the moment it is there (see ensure).
+            offered.add(player.getUniqueId());
+            awaitingUpload.add(player.getUniqueId());
+            upload();
+            return true;
+        }
         serve();
         if (hosting() && server == null) return false;
         offered.add(player.getUniqueId());
@@ -526,6 +627,9 @@ public final class DrawnPack {
     }
 
     public synchronized void stop() {
+        if (uploads != null) uploads.shutdownNow();
+        uploads = null;
+        awaitingUpload.clear();
         if (server != null) server.close();
         server = null;
         servedPort = -1;

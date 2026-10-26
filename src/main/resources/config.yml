@@ -96,7 +96,15 @@ pack:
   send: true
   # Kick players who decline it.
   required: false
-  # Served from this server on this port...
+  # upload: the default. The pack goes to ResourcePack AI's pack host
+  #   (packs.resourcepack.ai), free, and players download it from there:
+  #   nothing to open or set up, on any host. It is only uploaded again when it
+  #   changes, it is kept while this server uses it (one nothing has used for
+  #   30 days is deleted), and only the Minecraft client can download it. If an
+  #   upload fails, this server serves it as below until it works.
+  # serve: this server serves it, on the port and address below.
+  host: upload
+  # serve (or upload when it fails): served from this server on this port...
   port: 8165
   # ...listening on this address only (blank: every address the machine has).
   bind: ""
