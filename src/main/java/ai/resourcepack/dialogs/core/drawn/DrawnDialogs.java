@@ -77,6 +77,8 @@ public final class DrawnDialogs {
 
     private static final Gson GSON = new Gson();
     static final Pattern ENGINE_CLICK = Pattern.compile("^(/?)(?:rp|rpe|rpengine) (page|var|slot) (.*)$");
+    /** A "Run as console" click, as Studio writes it: {@code rp click <key>}, the command kept beside the dialog. */
+    static final Pattern CONSOLE_CLICK = Pattern.compile("^/?(?:rp|rpe|rpengine) click ([0-9a-f]{8})$");
     private static final Pattern NEXT_ACTION = Pattern.compile(";\\s*(?=\\[)");
     /** An action click as it is kept, which {@link #showPage} gives the drawing's nonce. */
     private static final Pattern ACT_CLICK = Pattern.compile("(\"command\":\"/?" + CLICK + " act \\d+)\"");
@@ -278,6 +280,7 @@ public final class DrawnDialogs {
         // Only a command dialog.yml itself has may run: dialogs.json is Studio's
         // answer, and an answer that came over the network does not get to add one.
         Set<String> allowed = DrawnFiles.commands(spec);
+        Map<String, String> consoles = DrawnFiles.consoleCommands(spec);
         Map<String, String> pages = new LinkedHashMap<>();
         Map<String, Set<String>> vars = new LinkedHashMap<>();
         Set<String> staysUp = new LinkedHashSet<>();
@@ -301,7 +304,7 @@ public final class DrawnDialogs {
                 if ("none".equals(a.getAsString())) (closes ? seamless : staysUp).add(studioId);
                 else if ("wait_for_response".equals(a.getAsString())) waits.add(studioId);
             }
-            JsonElement rewritten = rewrite(json, actions, allowed, refused, link -> opensHere(link, ns));
+            JsonElement rewritten = rewrite(json, actions, allowed, consoles, refused, link -> opensHere(link, ns));
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
             pages.put(studioId, GSON.toJson(rewritten));
             written.put(studioId, page);
@@ -339,7 +342,7 @@ public final class DrawnDialogs {
         // actions all of them made.
         Map<String, PageSounds> sounds = new LinkedHashMap<>();
         written.forEach((studioId, page) -> {
-            PageSounds s = pageSounds(page, actions);
+            PageSounds s = pageSounds(page, actions, consoles);
             if (s != null) sounds.put(studioId, s);
         });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
@@ -352,13 +355,18 @@ public final class DrawnDialogs {
 
     /** One page's click sounds from what Studio sent beside it, or null when it sent none. */
     static PageSounds pageSounds(JsonObject page, List<List<String>> actions) {
+        return pageSounds(page, actions, Map.of());
+    }
+
+    /** {@link #pageSounds(JsonObject, List)}, a console click's sound found by the command dialog.yml gives its key. */
+    static PageSounds pageSounds(JsonObject page, List<List<String>> actions, Map<String, String> consoles) {
         ClickSound dialog = page.get("clickSound") instanceof JsonObject o ? clickSound(o) : null;
         Map<String, ClickSound> clicks = new LinkedHashMap<>();
         if (page.get("clickSounds") instanceof JsonArray list) {
             for (JsonElement e : list) {
                 if (!(e instanceof JsonObject o) || !(o.get("command") instanceof JsonPrimitive c) || !c.isString()) continue;
                 ClickSound sound = clickSound(o);
-                String key = rewritten(c.getAsString(), actions);
+                String key = rewritten(c.getAsString(), actions, consoles);
                 if (sound != null && key != null) clicks.putIfAbsent(key, sound);
             }
         }
@@ -378,9 +386,19 @@ public final class DrawnDialogs {
 
     /** A Studio click's command as {@link #rewrite} sends it, slash off; null for one it refused. */
     static String rewritten(String command, List<List<String>> actions) {
+        return rewritten(command, actions, Map.of());
+    }
+
+    static String rewritten(String command, List<List<String>> actions, Map<String, String> consoles) {
         String bare = command.startsWith("/") ? command.substring(1) : command;
         Matcher m = ENGINE_CLICK.matcher(bare);
         if (m.matches()) return CLICK + " " + m.group(2) + " " + m.group(3);
+        Matcher console = CONSOLE_CLICK.matcher(bare);
+        if (console.matches()) {
+            String run = consoles.get(console.group(1));
+            int n = run == null ? -1 : actions.indexOf(List.of("[console] " + run));
+            return n < 0 ? null : CLICK + " act " + n;
+        }
         int n = actions.indexOf(actions(bare));
         return n < 0 ? null : CLICK + " act " + n;
     }
@@ -418,7 +436,12 @@ public final class DrawnDialogs {
     }
 
     static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused) {
-        return rewrite(e, actions, allowed, refused, link -> false);
+        return rewrite(e, actions, allowed, Map.of(), refused, link -> false);
+    }
+
+    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused,
+                               java.util.function.Predicate<String> ours) {
+        return rewrite(e, actions, allowed, Map.of(), refused, ours);
     }
 
     /**
@@ -437,11 +460,16 @@ public final class DrawnDialogs {
      * "Open another dialog" names a dialog that was not drawn in the same
      * session, which in a {@code /de edit} is every other one. An id that is
      * not ours is left as written: the registry may well have it.
+     *
+     * <p>A "Run as console" click ({@code rp click <key>}) is
+     * {@code [console] <command>}, the command being the one {@code consoles}
+     * (dialog.yml's, {@link DrawnFiles#consoleCommands}) has by that key; a key
+     * it does not have runs nothing, like any command dialog.yml lacks.
      */
-    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, List<String> refused,
-                               java.util.function.Predicate<String> ours) {
+    static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, Map<String, String> consoles,
+                               List<String> refused, java.util.function.Predicate<String> ours) {
         if (e instanceof JsonArray a) {
-            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions, allowed, refused, ours));
+            for (int i = 0; i < a.size(); i++) a.set(i, rewrite(a.get(i), actions, allowed, consoles, refused, ours));
         } else if (e instanceof JsonObject o) {
             boolean bodyOpens = o.get("action") instanceof JsonPrimitive act && "show_dialog".equals(act.getAsString());
             boolean buttonOpens = o.get("type") instanceof JsonPrimitive type
@@ -469,8 +497,19 @@ public final class DrawnDialogs {
             if (runs && o.has("command") && o.get("command").isJsonPrimitive()) {
                 String command = o.get("command").getAsString();
                 Matcher m = ENGINE_CLICK.matcher(command);
+                Matcher console = CONSOLE_CLICK.matcher(command);
                 if (m.matches()) {
                     o.addProperty("command", m.group(1) + CLICK + " " + m.group(2) + " " + m.group(3));
+                } else if (console.matches()) {
+                    String run = consoles.get(console.group(1));
+                    List<String> list = run == null ? List.of() : List.of("[console] " + run);
+                    if (run == null && !refused.contains(command)) refused.add(command);
+                    int n = actions.indexOf(list);
+                    if (n < 0) {
+                        n = actions.size();
+                        actions.add(list);
+                    }
+                    o.addProperty("command", (command.startsWith("/") ? "/" : "") + CLICK + " act " + n);
                 } else {
                     String slash = command.startsWith("/") ? "/" : "";
                     List<String> list = actions(command.substring(slash.length()));
@@ -486,7 +525,7 @@ public final class DrawnDialogs {
                     o.addProperty("command", slash + CLICK + " act " + n);
                 }
             }
-            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions, allowed, refused, ours));
+            for (String key : List.copyOf(o.keySet())) o.add(key, rewrite(o.get(key), actions, allowed, consoles, refused, ours));
         }
         return e;
     }

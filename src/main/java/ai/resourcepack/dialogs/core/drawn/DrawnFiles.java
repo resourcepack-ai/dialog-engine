@@ -226,6 +226,47 @@ public final class DrawnFiles {
         return out;
     }
 
+    /**
+     * The document's "Run as console" commands, by the key Studio's click names
+     * them with ({@code rp click <key>}): each piece or button whose action is
+     * {@code console_command}, its command as {@link #commandText} spells it.
+     * One built from what the player typed ({@code $(name)}) is left out, as
+     * Studio leaves it out. Read from dialog.yml, never from Studio's answer.
+     */
+    public static Map<String, String> consoleCommands(Map<String, Object> spec) {
+        Map<String, String> out = new LinkedHashMap<>();
+        consoles(spec, out);
+        return out;
+    }
+
+    private static void consoles(Object value, Map<String, String> out) {
+        if (value instanceof Map<?, ?> map) {
+            if ("console_command".equals(map.get("action")) && map.get("value") instanceof String raw && !TYPED.matcher(raw).find()) {
+                String command = commandText(raw);
+                if (!command.isEmpty()) out.put(consoleKey(command), command);
+            }
+            for (Object v : map.values()) consoles(v, out);
+        } else if (value instanceof List<?> list) {
+            for (Object v : list) consoles(v, out);
+        }
+    }
+
+    /** What the player typed, in a command: a dialog input's {@code $(key)}. */
+    private static final Pattern TYPED = Pattern.compile("\\$\\([A-Za-z0-9_]+\\)");
+
+    /**
+     * Studio's {@code dialogConsoleKey}: eight hex digits of the command's
+     * FNV-1a hash over its UTF-16 characters (RP Engine makes it the same way).
+     */
+    static String consoleKey(String command) {
+        int hash = 0x811c9dc5;
+        for (int i = 0; i < command.length(); i++) {
+            hash ^= command.charAt(i);
+            hash *= 0x01000193;
+        }
+        return String.format("%08x", hash);
+    }
+
     /** Every list in the document, by name, with how many rows it draws. */
     private static void lists(Object value, Map<String, Integer> out) {
         if (value instanceof Map<?, ?> map) {
