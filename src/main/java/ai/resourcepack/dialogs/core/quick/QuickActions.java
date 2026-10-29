@@ -46,14 +46,15 @@ import java.util.regex.Pattern;
  *       player's copy is drawn for them as they join ({@link #prepare}, from
  *       the pre-login event) and swapped into the registry packet they are
  *       sent ({@link JoinCopies}). Its values are what was true then, and its
- *       buttons are pinned to that player until they leave ({@link Clicks}).
+ *       buttons are pinned to that player until they leave ({@link Clicks}),
+ *       or for a drawn dialog, taken as clicks on it ({@code DrawnDialogs.adopt}).
  *       Paper only.</li>
  *   <li><b>launcher</b>: the key opens a one-button screen that asks the
  *       server for the dialog, which is then drawn fresh like any other. Also
  *       what a direct dialog falls back to wherever a copy cannot be made:
  *       Spigot, a dialog with a {@code permission:} (a joining player's
- *       permissions are not known yet), a JSON or drawn dialog, or a copy the
- *       game would not read.</li>
+ *       permissions are not known yet), a JSON dialog, a drawn one showing the
+ *       player's own items (the same), or a copy the game would not read.</li>
  * </ul>
  *
  * The file in the datapack is always the launcher, so the fallback is simply
@@ -114,6 +115,9 @@ public final class QuickActions {
             engine.plugin().getLogger().log(Level.WARNING, "Could not write the quick actions datapack", e);
         }
 
+        // A drawn copy is glyphs in the drawn pack, so the pack goes to everybody as they join.
+        engine.drawnPack.onKey(next.values().stream().anyMatch(d -> engine.drawn.has(d.id()) && directable(d)));
+
         boolean direct = next.values().stream().anyMatch(this::directable);
         if (direct && !installTried) {
             installTried = true;
@@ -149,6 +153,7 @@ public final class QuickActions {
 
     private Map<String, String> draw(UUID player, String name) {
         engine.clicks().forgetPinned(player);
+        engine.drawn.forgetQuick(player);
         sentAs.remove(player);
         Player standIn = StandIn.of(player, name);
         Map<String, String> out = new LinkedHashMap<>();
@@ -156,6 +161,15 @@ public final class QuickActions {
         onKey.forEach((id, def) -> {
             if (!directable(def)) return;
             try {
+                if (engine.drawn.has(def.id())) {
+                    String json = engine.drawn.drawQuick(standIn, def.id());
+                    if (json == null) return;
+                    JsonObject dialog = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+                    if (def.quick().label() != null) dialog.add("external_title", label(def));
+                    else if (!dialog.has("external_title") && dialog.has("title")) dialog.add("external_title", dialog.get("title").deepCopy());
+                    out.put(id, dialog.toString());
+                    return;
+                }
                 long drawing = -pins.incrementAndGet();
                 Session session = new Session(player, def.id(), def.defaults(), Set.of(), null);
                 Renderer.Drawn d = engine.renderer().draw(def, session, standIn, drawing);
@@ -182,6 +196,7 @@ public final class QuickActions {
 
     public void forget(UUID player) {
         sentAs.remove(player);
+        engine.drawn.forgetQuick(player);
         if (copies != null) copies.forget(player);
     }
 
@@ -204,7 +219,7 @@ public final class QuickActions {
 
     /** Whether a player can be given their own copy of it as they join. */
     private boolean directable(DialogDef def) {
-        return !def.quick().launcher() && def.permission() == null && def.json() == null && !engine.drawn.has(def.id());
+        return !def.quick().launcher() && def.permission() == null && def.json() == null;
     }
 
     /** The file: the dialog's name, and one button that asks for it. */

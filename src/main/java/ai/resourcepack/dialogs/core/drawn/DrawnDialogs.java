@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.common.quick.StandIn;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.ClickCtx;
@@ -132,6 +133,8 @@ public final class DrawnDialogs {
     private DialogVariables variables;
     private final Map<String, Drawn> dialogs = new LinkedHashMap<>();
     private final Map<UUID, Shown> lastShown = new ConcurrentHashMap<>();
+    /** Each player's own copies on the Quick Actions key, by drawn dialog: what {@link #adopt} reads their clicks against. */
+    private final Map<UUID, Map<String, Copy>> quickCopies = new ConcurrentHashMap<>();
     private final List<Command> commands = new ArrayList<>();
     public final List<String> problems = new ArrayList<>();
     /** Drawn dialogs whose dialog.yml was edited since they were drawn. */
@@ -139,6 +142,13 @@ public final class DrawnDialogs {
     private final Set<String> redrawing = ConcurrentHashMap.newKeySet();
     /** Who asked for the reload that found them, told when they are redrawn. */
     private CommandSender notify;
+
+    /**
+     * A copy of a dialog's first page drawn for a player as they joined, for the
+     * Quick Actions key: the page as stored when it was drawn ({@code source}),
+     * and as sent, with its own nonce.
+     */
+    private record Copy(String page, String source, Session session, String nonce, String json) {}
 
     public DrawnDialogs(Engine engine) {
         this.engine = engine;
@@ -242,18 +252,21 @@ public final class DrawnDialogs {
 
     /**
      * {@code quickAction:} (or {@code quick-action:}) in dialog.yml: true, a
-     * mode, or a map with {@code label}. A drawn dialog is always behind the
-     * launcher, whatever mode it asks for: its picture is glyphs in the pack,
-     * which reaches a player when a drawn dialog first opens, and a copy the
-     * key opened before that would be a screen of missing boxes.
+     * mode ({@code direct} or {@code launcher}), or a map with {@code mode},
+     * {@code launcher: true} (Studio's own spelling) and {@code label}. Direct
+     * is the default, as for a YAML dialog: the picture's glyphs are in the
+     * drawn pack, which every player is sent as they join while a drawn dialog
+     * is on the key ({@link DrawnPack#onKey}).
      */
-    private static Defs.QuickAction quickAction(Map<String, Object> spec, String id) {
+    static Defs.QuickAction quickAction(Map<String, Object> spec, String id) {
         if (spec == null) return null;
         Object q = spec.containsKey("quickAction") ? spec.get("quickAction") : spec.get("quick-action");
         if (q == null || Boolean.FALSE.equals(q) || "false".equals(q)) return null;
+        boolean launcher = "launcher".equals(q)
+                || q instanceof Map<?, ?> m && (Boolean.TRUE.equals(m.get("launcher")) || "launcher".equals(m.get("mode")));
         String label = q instanceof Map<?, ?> m && m.get("label") instanceof String l ? l
                 : spec.get("title") instanceof String t ? t : null;
-        return new Defs.QuickAction(true, label);
+        return new Defs.QuickAction(launcher, label);
     }
 
     /** {@code move}: the characters this dialog's picture was moved to ({@link DrawnGlyphs}), or null. */
@@ -534,9 +547,7 @@ public final class DrawnDialogs {
         if (json == null) return false;
         // This drawing's nonce, on every action click: a click typed into chat
         // without it does nothing, and with it works once.
-        byte[] bytes = new byte[9];
-        RANDOM.nextBytes(bytes);
-        String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        String nonce = nonce();
         json = ACT_CLICK.matcher(json).replaceAll("$1 " + nonce + "\"");
         Shown before = lastShown.get(player.getUniqueId());
         json = filled(player, d, json, session.values);
@@ -557,6 +568,61 @@ public final class DrawnDialogs {
         }
         engine.plugin().getLogger().warning("Could not show drawn dialog " + d.id + ".");
         return false;
+    }
+
+    private static String nonce() {
+        byte[] bytes = new byte[9];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * A joining player's own copy of drawn dialog {@code id} for the Quick
+     * Actions key: its first page drawn for {@code standIn}, as {@link
+     * #showPage} draws one, but for somebody not in a world yet. Null when it
+     * cannot be one, because it shows the player's own items (not known while
+     * they join), and the key keeps the launcher for it.
+     */
+    public String drawQuick(Player standIn, String id) {
+        Drawn d = dialogs.get(id.toLowerCase(Locale.ROOT));
+        String source = d == null ? null : d.pages.get(d.first);
+        if (source == null || DialogItems.perPlayer(source)) return null;
+        String nonce = nonce();
+        Session session = new Session(standIn.getUniqueId(), d.id, Map.of(), Set.of(), null);
+        String json = ACT_CLICK.matcher(source).replaceAll("$1 " + nonce + "\"");
+        json = DialogBars.fill(filled(standIn, d, json, session.values));
+        quickCopies.computeIfAbsent(standIn.getUniqueId(), k -> new ConcurrentHashMap<>())
+                .put(d.id, new Copy(d.first, source, session, nonce, json));
+        return json;
+    }
+
+    /** Forgets a player's quick action copies: they left, or are joining again. */
+    public void forgetQuick(UUID player) {
+        quickCopies.remove(player);
+    }
+
+    /**
+     * A click from one of the player's own copies on the Quick Actions key,
+     * which the server never saw open (the key is the client's). When the
+     * drawing on their screen as far as the server knows does not hold the
+     * click and a copy does, the copy is what they were shown, its nonce good
+     * again: every press of the key opens it afresh. Not for a copy of a page
+     * changed since it was drawn, whose clicks may now mean something else.
+     */
+    private Shown adopt(Player player, String[] args, Shown shown) {
+        Map<String, Copy> mine = quickCopies.get(player.getUniqueId());
+        if (mine == null || mine.isEmpty()) return shown;
+        String sent = CLICK + " " + String.join(" ", args);
+        if (shown != null && shown.live && holds(shown.json, sent)) return shown;
+        for (Map.Entry<String, Copy> e : mine.entrySet()) {
+            Copy copy = e.getValue();
+            Drawn d = dialogs.get(e.getKey());
+            if (d == null || !copy.source.equals(d.pages.get(copy.page)) || !holds(copy.json, sent)) continue;
+            Shown adopted = new Shown(d.id, copy.page, copy.session, copy.nonce, true, System.currentTimeMillis(), true, copy.json);
+            lastShown.put(player.getUniqueId(), adopted);
+            return adopted;
+        }
+        return shown;
     }
 
     /**
@@ -604,7 +670,8 @@ public final class DrawnDialogs {
             // same on both plugins.
             Optional<String> builtIn = Placeholders.lookup(player, name, null);
             if (builtIn.isPresent()) return builtIn;
-            Optional<String> stored = variables().get(player, name);
+            // A player still joining has no settings to read yet: a bound control shows its default.
+            Optional<String> stored = player instanceof StandIn ? Optional.empty() : variables().get(player, name);
             if (stored.isPresent()) return stored;
             String own = scope.lookup(name);
             if (own != null) return Optional.of(own);
@@ -629,7 +696,7 @@ public final class DrawnDialogs {
     public void click(Player player, String[] args) {
         if (args.length == 0 || !engine.allowClick(player)) return;
         UUID uuid = player.getUniqueId();
-        Shown shown = lastShown.get(uuid);
+        Shown shown = adopt(player, args, lastShown.get(uuid));
         Drawn d = shown == null || !shown.live ? null : dialogs.get(shown.drawn);
         boolean act = args[0].equalsIgnoreCase("act");
         // An action click is held as written, without the nonce it was sent with.

@@ -143,7 +143,8 @@ only). `launcher` has G open a one-button screen that asks the server for the
 dialog, drawn fresh. A section takes `mode:` and `label:`, the name in the key's
 list. The key is read from a datapack (`world/datapacks/dialogengine_quick`), so
 a change takes a restart. A dialog with a `permission:`, a `json:` dialog, a
-drawn dialog and anything on Spigot use the launcher.
+drawn dialog showing the player's own items and anything on Spigot use the
+launcher.
 
 ### Body
 

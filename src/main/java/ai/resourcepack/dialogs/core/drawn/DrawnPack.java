@@ -75,6 +75,8 @@ public final class DrawnPack {
     private String servedBind;
     /** Whether a drawn dialog other than the samples and plugins' ({@link DrawnInstall}) is here, which is what sends the pack on join. */
     private boolean ownDialogs;
+    /** Whether a drawn dialog opens straight from the Quick Actions key, which also sends the pack on join. */
+    private volatile boolean onKey;
     /** Players sent the pack since they joined, whatever they made of it so far. */
     private final java.util.Set<UUID> offered = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -546,10 +548,17 @@ public final class DrawnPack {
      * Whether a player joining is sent it. Not when the only drawn dialogs are
      * the samples and those plugins ship: a server that has never made one of
      * its own does not ask every player to download a pack, and their pack is
-     * sent when one is opened ({@link #needs}).
+     * sent when one is opened ({@link #needs}). Always when one of them is on
+     * the Quick Actions key: the key opens a copy the player already holds, and
+     * without the pack it is a screen of missing glyphs.
      */
     public boolean onJoin() {
-        return ownDialogs;
+        return ownDialogs || onKey;
+    }
+
+    /** Whether a drawn dialog opens straight from the Quick Actions key ({@link #onJoin}). */
+    public void onKey(boolean direct) {
+        onKey = direct;
     }
 
     /** Whether showing a player a drawn dialog has to wait for the pack to reach them first. */
