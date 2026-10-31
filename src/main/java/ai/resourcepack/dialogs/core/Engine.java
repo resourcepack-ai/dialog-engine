@@ -297,7 +297,8 @@ public final class Engine implements DialogEngineAPI {
                 }
             }
             default -> {
-                // The copy a raise replaced (see show), reported once, before the one sent in its place loads: ignored once.
+                // A raise's replaced copy, ignored once in case a client reports it. 1.21.11 and 26.2 clients report none for
+                // a pack sent again under its id (only ACCEPTED, DOWNLOADED, SUCCESSFULLY_LOADED), which clears the mark.
                 if (status.equals("DISCARDED") && raising.remove(player.getUniqueId())) return;
                 raising.remove(player.getUniqueId());
                 drawnPack.refused(player);
