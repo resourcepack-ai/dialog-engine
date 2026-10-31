@@ -212,6 +212,15 @@ public final class Engine implements DialogEngineAPI {
     private final java.util.Set<UUID> awaitingOthers = ConcurrentHashMap.newKeySet();
     /** Per player, the other plugins' packs ours have already been sent again above. */
     private final Map<UUID, java.util.Set<UUID>> raisedOver = new ConcurrentHashMap<>();
+    /**
+     * Players whose game loaded another plugin of ours' pack after ours (MC
+     * GUI sends its own again before a page): theirs is on top and replaces
+     * the same core shaders, so ours goes on top again before the next drawn
+     * dialog ({@link #show}).
+     */
+    private final Set<UUID> buried = ConcurrentHashMap.newKeySet();
+    /** Players ours was sent again to for that, until it has loaded or failed. */
+    private final Set<UUID> raising = ConcurrentHashMap.newKeySet();
 
     /** Sends the drawn dialog pack to a player joining, when there is one they should have. */
     public void sendDrawnPack(Player player) {
@@ -233,12 +242,14 @@ public final class Engine implements DialogEngineAPI {
      * Another plugin's pack reached a player. If ours was waiting for it,
      * ours goes now, on top. If ours went first, it goes again, on top, once
      * per pack per player so two plugins doing the same cannot take turns
-     * forever; never for another plugin of ours, which stacks beside it and
-     * never takes it off.
+     * forever. Another plugin of ours stacks beside it and never takes it
+     * off, so ours is not sent again then, only marked {@link #buried}.
      */
     private void otherPack(Player player, UUID pack, String status) {
-        if (!status.equals("ACCEPTED") || pack == null
-                || ai.resourcepack.common.shader.SiblingPacks.fromSibling(plugin, pack)) {
+        if (!status.equals("ACCEPTED") || pack == null) return;
+        if (ai.resourcepack.common.shader.SiblingPacks.fromSibling(plugin, pack)) {
+            // Not sent again now, while theirs is in use: only before our next drawn dialog.
+            if (drawnPack.sentTo(player)) buried.add(player.getUniqueId());
             return;
         }
         if (!raisedOver.computeIfAbsent(player.getUniqueId(), k -> ConcurrentHashMap.newKeySet()).add(pack)) return;
@@ -271,10 +282,12 @@ public final class Engine implements DialogEngineAPI {
         }
         switch (status) {
             case "SUCCESSFULLY_LOADED" -> {
+                raising.remove(player.getUniqueId());
                 Runnable open = waitingForPack.remove(player.getUniqueId());
                 if (open != null) open.run();
             }
-            case "ACCEPTED", "DOWNLOADED" -> {
+            case "ACCEPTED" -> buried.remove(player.getUniqueId());
+            case "DOWNLOADED" -> {
                 // Still on its way.
             }
             case "DECLINED" -> {
@@ -284,6 +297,10 @@ public final class Engine implements DialogEngineAPI {
                 }
             }
             default -> {
+                // A raise's replaced copy, ignored once in case a client reports it. 1.21.11 and 26.2 clients report none for
+                // a pack sent again under its id (only ACCEPTED, DOWNLOADED, SUCCESSFULLY_LOADED), which clears the mark.
+                if (status.equals("DISCARDED") && raising.remove(player.getUniqueId())) return;
+                raising.remove(player.getUniqueId());
                 drawnPack.refused(player);
                 if (waitingForPack.remove(player.getUniqueId()) != null) {
                     tell(player, message("pack-failed", "<red>This menu's resource pack could not be loaded."));
@@ -427,6 +444,8 @@ public final class Engine implements DialogEngineAPI {
         drawnPack.forget(player);
         awaitingOthers.remove(player.getUniqueId());
         raisedOver.remove(player.getUniqueId());
+        buried.remove(player.getUniqueId());
+        raising.remove(player.getUniqueId());
         waitingForPack.remove(player.getUniqueId());
         sessions.remove(player.getUniqueId());
         shown.remove(player.getUniqueId());
@@ -514,16 +533,22 @@ public final class Engine implements DialogEngineAPI {
         if (!player.getUniqueId().equals(session.viewer)) return false;
         if (drawn.has(session.dialogId)) {
             if (!player.isOnline()) return false;
-            if (drawnPack.needs(player)) {
+            // Ours is under another plugin of ours' pack (see buried): sent again first, so the dialog draws with our shaders.
+            // Sent again under the same id, not taken off first: the client puts it on top in one reload (taking it off
+            // first was two, the first without it).
+            boolean raise = !drawnPack.needs(player) && buried.remove(player.getUniqueId());
+            if (raise || drawnPack.needs(player)) {
                 // Drawn before the pack reaches them, it would be a box of missing glyphs: send it, and open this once it has loaded.
                 // Not sent (the console says why): shown anyway, since its buttons still work.
                 waitingForPack.put(player.getUniqueId(), () -> {
                     if (player.isOnline()) show(player, session, reopened);
                 });
+                if (raise) raising.add(player.getUniqueId());
                 if (drawnPack.send(player)) {
                     tell(player, message("pack-loading", "<gray>Loading this menu's resource pack..."));
                     return true;
                 }
+                raising.remove(player.getUniqueId());
                 waitingForPack.remove(player.getUniqueId());
             }
             DialogOpenEvent event = new DialogOpenEvent(player, session.dialogId, session.values, reopened);
