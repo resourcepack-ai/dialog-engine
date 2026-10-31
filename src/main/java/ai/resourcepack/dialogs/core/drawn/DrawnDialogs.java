@@ -79,6 +79,21 @@ public final class DrawnDialogs {
     static final Pattern ENGINE_CLICK = Pattern.compile("^(/?)(?:rp|rpe|rpengine) (page|var|slot) (.*)$");
     /** A "Run as console" click, as Studio writes it: {@code rp click <key>}, the command kept beside the dialog. */
     static final Pattern CONSOLE_CLICK = Pattern.compile("^/?(?:rp|rpe|rpengine) click ([0-9a-f]{8})$");
+    /** A "Run command" click with several commands, as Studio writes it: {@code rp run <key>}, the commands kept beside the dialog. */
+    static final Pattern RUN_CLICK = Pattern.compile("^/?(?:rp|rpe|rpengine) run ([0-9a-f]{8})$");
+
+    /**
+     * The actions a click naming {@code key} runs: each of dialog.yml's
+     * commands by that key, one per line, as {@code tag} ({@code console} or
+     * {@code player}); none for a key it does not have.
+     */
+    static List<String> keyed(Map<String, String> consoles, String key, String tag) {
+        String run = consoles.get(key);
+        if (run == null) return List.of();
+        List<String> out = new ArrayList<>();
+        for (String line : run.split("\n")) if (!line.isBlank()) out.add("[" + tag + "] " + line);
+        return List.copyOf(out);
+    }
     private static final Pattern NEXT_ACTION = Pattern.compile(";\\s*(?=\\[)");
     /** An action click as it is kept, which {@link #showPage} gives the drawing's nonce. */
     private static final Pattern ACT_CLICK = Pattern.compile("(\"command\":\"/?" + CLICK + " act \\d+)\"");
@@ -394,9 +409,10 @@ public final class DrawnDialogs {
         Matcher m = ENGINE_CLICK.matcher(bare);
         if (m.matches()) return CLICK + " " + m.group(2) + " " + m.group(3);
         Matcher console = CONSOLE_CLICK.matcher(bare);
-        if (console.matches()) {
-            String run = consoles.get(console.group(1));
-            int n = run == null ? -1 : actions.indexOf(List.of("[console] " + run));
+        Matcher run = RUN_CLICK.matcher(bare);
+        if (console.matches() || run.matches()) {
+            List<String> list = console.matches() ? keyed(consoles, console.group(1), "console") : keyed(consoles, run.group(1), "player");
+            int n = list.isEmpty() ? -1 : actions.indexOf(list);
             return n < 0 ? null : CLICK + " act " + n;
         }
         int n = actions.indexOf(actions(bare));
@@ -462,9 +478,11 @@ public final class DrawnDialogs {
      * not ours is left as written: the registry may well have it.
      *
      * <p>A "Run as console" click ({@code rp click <key>}) is
-     * {@code [console] <command>}, the command being the one {@code consoles}
-     * (dialog.yml's, {@link DrawnFiles#consoleCommands}) has by that key; a key
-     * it does not have runs nothing, like any command dialog.yml lacks.
+     * {@code [console] <command>} for each command {@code consoles}
+     * (dialog.yml's, {@link DrawnFiles#consoleCommands}) has by that key, in
+     * order; a "Run command" with several ({@code rp run <key>}) is the same
+     * as {@code [player]}. A key it does not have runs nothing, like any
+     * command dialog.yml lacks.
      */
     static JsonElement rewrite(JsonElement e, List<List<String>> actions, Set<String> allowed, Map<String, String> consoles,
                                List<String> refused, java.util.function.Predicate<String> ours) {
@@ -498,12 +516,12 @@ public final class DrawnDialogs {
                 String command = o.get("command").getAsString();
                 Matcher m = ENGINE_CLICK.matcher(command);
                 Matcher console = CONSOLE_CLICK.matcher(command);
+                Matcher run = RUN_CLICK.matcher(command);
                 if (m.matches()) {
                     o.addProperty("command", m.group(1) + CLICK + " " + m.group(2) + " " + m.group(3));
-                } else if (console.matches()) {
-                    String run = consoles.get(console.group(1));
-                    List<String> list = run == null ? List.of() : List.of("[console] " + run);
-                    if (run == null && !refused.contains(command)) refused.add(command);
+                } else if (console.matches() || run.matches()) {
+                    List<String> list = console.matches() ? keyed(consoles, console.group(1), "console") : keyed(consoles, run.group(1), "player");
+                    if (list.isEmpty() && !refused.contains(command)) refused.add(command);
                     int n = actions.indexOf(list);
                     if (n < 0) {
                         n = actions.size();

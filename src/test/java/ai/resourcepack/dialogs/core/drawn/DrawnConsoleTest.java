@@ -59,4 +59,41 @@ class DrawnConsoleTest {
         assertEquals(List.of("rp click 0badc0de"), refused);
         assertEquals("dialogclick act 0", DrawnDialogs.rewritten("rp click " + KEY, actions, Map.of(KEY, "warp spawn {player}")));
     }
+
+    /**
+     * Several commands on one button, one per line: a console button's are
+     * {@code [console]} actions in order, and a "Run command" with more than
+     * one is Studio's {@code rp run <key>}, {@code [player]} actions in order.
+     */
+    @Test
+    void severalCommandsAreOneActionListInOrder() {
+        String food = "give {player} bread\ngive {player} torch 16";
+        String go = "spawn\nkit starter";
+        Map<String, Object> spec = Map.of("buttons", List.of(
+                Map.of("action", "console_command", "value", "give {player} bread\n\n/give {player} torch 16"),
+                Map.of("action", "run_command", "value", "/spawn\r\nkit starter"),
+                Map.of("action", "run_command", "value", "shop")));
+        Map<String, String> consoles = DrawnFiles.consoleCommands(spec);
+        String foodKey = DrawnFiles.consoleKey(food);
+        String goKey = DrawnFiles.consoleKey(go);
+        assertEquals(Map.of(foodKey, food, goKey, go), consoles);
+
+        String page = "{\"type\":\"minecraft:multi_action\",\"title\":\"Kit\",\"actions\":["
+                + "{\"label\":\"Food\",\"action\":{\"type\":\"minecraft:run_command\",\"command\":\"rp click " + foodKey + "\"}},"
+                + "{\"label\":\"Go\",\"action\":{\"type\":\"minecraft:run_command\",\"command\":\"rp run " + goKey + "\"}}]}";
+        JsonElement json = JsonParser.parseString(page);
+        // Studio's own clicks by key are not commands the drawing invented.
+        assertEquals(List.of(), DrawnFiles.invented(json, DrawnFiles.commands(spec)));
+        List<List<String>> actions = new ArrayList<>();
+        List<String> refused = new ArrayList<>();
+        DrawnDialogs.rewrite(json, actions, Set.of(), consoles, refused, link -> false);
+        assertEquals(List.of(
+                List.of("[console] give {player} bread", "[console] give {player} torch 16"),
+                List.of("[player] spawn", "[player] kit starter")), actions);
+        assertEquals(List.of(), refused);
+        assertFalse(json.toString().contains("rp run"), json.toString());
+        assertEquals("dialogclick act 1", DrawnDialogs.rewritten("rp run " + goKey, actions, consoles));
+        // A key clicked one way never runs the other way's actions.
+        assertEquals(null, DrawnDialogs.rewritten("rp run " + foodKey, actions, consoles));
+    }
 }

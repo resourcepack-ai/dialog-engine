@@ -241,14 +241,37 @@ public final class DrawnFiles {
 
     private static void consoles(Object value, Map<String, String> out) {
         if (value instanceof Map<?, ?> map) {
-            if ("console_command".equals(map.get("action")) && map.get("value") instanceof String raw && !TYPED.matcher(raw).find()) {
-                String command = commandText(raw);
-                if (!command.isEmpty()) out.put(consoleKey(command), command);
+            // A "Run command" with several commands is kept by key the same way
+            // (Studio's `rp run <key>`); one is the game's own run_command.
+            boolean console = "console_command".equals(map.get("action"));
+            boolean run = "run_command".equals(map.get("action"));
+            if ((console || run) && map.get("value") instanceof String raw && !TYPED.matcher(raw).find()) {
+                List<String> lines = commandLines(raw);
+                if (!lines.isEmpty() && (console || lines.size() > 1)) {
+                    String commands = String.join("\n", lines);
+                    out.put(consoleKey(commands), commands);
+                }
             }
             for (Object v : map.values()) consoles(v, out);
         } else if (value instanceof List<?> list) {
             for (Object v : list) consoles(v, out);
         }
+    }
+
+    /** The most commands one click runs: Studio's {@code DIALOG_MAX_CLICK_COMMANDS}. */
+    static final int MAX_CLICK_COMMANDS = 16;
+
+    /**
+     * A click's commands, one per line, each as {@link #commandText} spells
+     * it, blank lines dropped (Studio's {@code dialogCommandLines}).
+     */
+    static List<String> commandLines(String value) {
+        List<String> out = new ArrayList<>();
+        for (String line : value.split("\r?\n", -1)) {
+            String command = commandText(line);
+            if (!command.isEmpty() && out.size() < MAX_CLICK_COMMANDS) out.add(command);
+        }
+        return out;
     }
 
     /** What the player typed, in a command: a dialog input's {@code $(key)}. */
@@ -309,7 +332,10 @@ public final class DrawnFiles {
                     || (o.get("type") instanceof JsonPrimitive p2 && p2.isString() && "minecraft:run_command".equals(p2.getAsString()));
             if (runs && o.get("command") instanceof JsonPrimitive c && c.isString()) {
                 String command = c.getAsString();
-                if (!DrawnDialogs.ENGINE_CLICK.matcher(command).matches() && !allowed.contains(commandText(command))) out.add(command);
+                // A console or several-command click names its commands by key, and
+                // only what dialog.yml has by that key ever runs (DrawnDialogs.rewrite).
+                boolean byKey = DrawnDialogs.CONSOLE_CLICK.matcher(command).matches() || DrawnDialogs.RUN_CLICK.matcher(command).matches();
+                if (!byKey && !DrawnDialogs.ENGINE_CLICK.matcher(command).matches() && !allowed.contains(commandText(command))) out.add(command);
             }
             for (Map.Entry<String, JsonElement> x : o.entrySet()) scan(x.getValue(), allowed, out);
         }
