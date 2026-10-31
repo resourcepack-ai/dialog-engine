@@ -297,7 +297,7 @@ public final class Engine implements DialogEngineAPI {
                 }
             }
             default -> {
-                // The copy a raise took off (see show): the one sent in its place is on its way.
+                // The copy a raise replaced (see show): the one sent in its place is on its way.
                 if (status.equals("DISCARDED") && raising.contains(player.getUniqueId())) return;
                 raising.remove(player.getUniqueId());
                 drawnPack.refused(player);
@@ -533,6 +533,8 @@ public final class Engine implements DialogEngineAPI {
         if (drawn.has(session.dialogId)) {
             if (!player.isOnline()) return false;
             // Ours is under another plugin of ours' pack (see buried): sent again first, so the dialog draws with our shaders.
+            // Sent again under the same id, not taken off first: the client puts it on top in one reload (taking it off
+            // first was two, the first without it).
             boolean raise = !drawnPack.needs(player) && buried.remove(player.getUniqueId());
             if (raise || drawnPack.needs(player)) {
                 // Drawn before the pack reaches them, it would be a box of missing glyphs: send it, and open this once it has loaded.
@@ -541,7 +543,7 @@ public final class Engine implements DialogEngineAPI {
                     if (player.isOnline()) show(player, session, reopened);
                 });
                 if (raise) raising.add(player.getUniqueId());
-                if (raise ? drawnPack.resend(player) : drawnPack.send(player)) {
+                if (drawnPack.send(player)) {
                     tell(player, message("pack-loading", "<gray>Loading this menu's resource pack..."));
                     return true;
                 }
