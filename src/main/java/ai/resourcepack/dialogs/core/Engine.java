@@ -297,8 +297,8 @@ public final class Engine implements DialogEngineAPI {
                 }
             }
             default -> {
-                // The copy a raise replaced (see show): the one sent in its place is on its way.
-                if (status.equals("DISCARDED") && raising.contains(player.getUniqueId())) return;
+                // The copy a raise replaced (see show), reported once, before the one sent in its place loads: ignored once.
+                if (status.equals("DISCARDED") && raising.remove(player.getUniqueId())) return;
                 raising.remove(player.getUniqueId());
                 drawnPack.refused(player);
                 if (waitingForPack.remove(player.getUniqueId()) != null) {
