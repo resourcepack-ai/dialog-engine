@@ -1,5 +1,7 @@
+// GENERATED from Studio's description of this wire. Do not edit by hand.
 package ai.resourcepack.dialogs.core.edit;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -7,8 +9,11 @@ import java.util.Map;
  *
  * <p>The other end is Studio's edit-session wire, the same one RP Engine's
  * {@code /rp edit} uses: a session of kind {@code dialog}, carrying ONE dialog
- * as JSON. Studio reads and writes these field names exactly, so renaming one
- * here breaks {@code /de edit} until Studio is changed to match.
+ * as JSON.
+ *
+ * <p><strong>Generated.</strong> Studio writes this file from the same
+ * description it writes its own side from, so the two cannot disagree about a
+ * field's name or type. Do not edit it by hand.
  */
 public final class EditWire {
 
@@ -30,14 +35,7 @@ public final class EditWire {
         public String path;
         public String key;
         public Map<String, Object> spec;
-        public java.util.List<Map<String, Object>> built;
-    }
-
-    /** One file of the pack that draws it. */
-    public static final class File {
-        public String path;
-        public String encoding;
-        public String content;
+        public List<Map<String, Object>> built;
     }
 
     /** The answer to opening one. */
@@ -64,7 +62,14 @@ public final class EditWire {
         public String id;
         public String kind;
         public long revision;
-        public java.util.List<File> files;
+        public List<File> files;
         public Dialog dialog;
+    }
+
+    /** One file of the pack that draws it. */
+    public static final class File {
+        public String path;
+        public String encoding;
+        public String content;
     }
 }
