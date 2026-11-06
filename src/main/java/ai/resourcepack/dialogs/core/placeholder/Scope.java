@@ -53,7 +53,7 @@ public final class Scope implements DialogContext {
         if (v != null) return v;
         v = builtIn(key);
         if (v != null) return v;
-        return engine.resolvePlaceholder(viewer, this, key);
+        return engine == null ? null : engine.resolvePlaceholder(viewer, this, key);
     }
 
     boolean isUntrusted(String key) {

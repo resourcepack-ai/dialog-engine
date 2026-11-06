@@ -27,9 +27,12 @@ public final class Conditions {
         try {
             Parser p = new Parser(tokenize(expression), scope);
             boolean result = p.or();
+            // Words left over ("{a} {b}") mean the expression was not what it
+            // looks like, and a condition that cannot be read hides its piece.
+            if (p.pos < p.tokens.size()) throw new IllegalArgumentException("unexpected '" + p.tokens.get(p.pos) + "'");
             return result;
         } catch (RuntimeException e) {
-            scope.engine.warnOnce("Bad condition '" + expression + "' in " + scope.dialogId + ": " + e.getMessage());
+            if (scope.engine != null) scope.engine.warnOnce("Bad condition '" + expression + "' in " + scope.dialogId + ": " + e.getMessage());
             return false;
         }
     }
@@ -107,7 +110,8 @@ public final class Conditions {
             if (peek("(")) {
                 pos++;
                 boolean v = or();
-                if (peek(")")) pos++;
+                if (!peek(")")) throw new IllegalArgumentException("a bracket is never closed");
+                pos++;
                 return v;
             }
             String left = operand();
