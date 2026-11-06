@@ -33,6 +33,10 @@ class DrawnConsoleTest {
     @Test
     void theKeyIsStudios() {
         assertEquals(KEY, DrawnFiles.consoleKey("warp spawn {player}"));
+        // The same vectors RP Engine's test pins, the last one past ASCII,
+        // where a hash over chars rather than UTF-8 bytes would part ways.
+        assertEquals("461f1f94", DrawnFiles.consoleKey("give {player} diamond 1"));
+        assertEquals("5cc5edc5", DrawnFiles.consoleKey("é☃"));
     }
 
     @Test
