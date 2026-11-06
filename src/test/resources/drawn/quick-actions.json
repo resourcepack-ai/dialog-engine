@@ -1,0 +1,10 @@
+{
+  "about": "A drawn dialog's quickAction as Studio stores it in dialog.yml (which is its document), and what Dialog Engine must make of it. Studio's verify:dialogs checks each quickAction is a shape Studio still writes.",
+  "cases": [
+    { "spec": { "title": "Shop", "quickAction": { "launcher": true, "label": "Menu" } }, "launcher": true, "label": "Menu" },
+    { "spec": { "title": "Shop", "quickAction": {} }, "launcher": false, "label": "Shop" },
+    { "spec": { "title": "Shop", "quickAction": { "label": "Warps" } }, "launcher": false, "label": "Warps" },
+    { "spec": { "title": "Shop", "quickAction": { "launcher": true } }, "launcher": true, "label": "Shop" },
+    { "spec": { "title": "Shop" }, "absent": true }
+  ]
+}
