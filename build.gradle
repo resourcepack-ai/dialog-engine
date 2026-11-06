@@ -105,7 +105,7 @@ processResources {
 // check and the name a warning is logged under are rewritten.
 def engineRoot = file('../rp-engine/src/main/java/ai/resourcepack/engine')
 def engineDialogs = file("${engineRoot}/core/dialog")
-def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions',
+def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions', 'DialogSorts',
                      // The player's inventory in a drawn dialog: its items drawn in the
                      // slots, their tooltips, and moving them (rp slot).
                      'DialogItems', 'DialogItemIcons', 'DialogItemModels', 'DialogSlots']
