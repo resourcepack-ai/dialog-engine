@@ -279,8 +279,9 @@ Vault expansion).
 - Whatever a plugin registered, and every PlaceholderAPI `%placeholder%`.
   One in what a player typed is printed as typed, never filled.
 - **A choice**: `{mode?on:Enabled|off:Disabled|Unknown}` prints the words for
-  the value `mode` has, and the last entry when none matches. `$value` in the
-  words prints the value itself.
+  the value `mode` has, and the last entry when none matches. A `*` entry
+  matches any value that is not empty. `$value` in the words prints the value
+  itself.
 - **A filter**: `{name|raw}`, `{name|json}`, `{name|snbt}`, for putting what a
   player typed into a command (see Actions).
 

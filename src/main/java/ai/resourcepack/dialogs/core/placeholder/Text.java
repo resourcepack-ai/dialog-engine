@@ -154,7 +154,8 @@ public final class Text {
             boolean last = e == entries.length - 1;
             if (colon >= 0) {
                 String match = entry.substring(0, colon);
-                if (value != null && match.equalsIgnoreCase(value)) {
+                // "*" is any value that is not empty, as in RP Engine's drawn dialogs.
+                if (value != null && (match.equalsIgnoreCase(value) || (match.equals("*") && !value.isBlank()))) {
                     chosen = entry.substring(colon + 1);
                     break;
                 }
