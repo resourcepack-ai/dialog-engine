@@ -692,6 +692,13 @@ public final class DrawnDialogs {
         boolean rows = DialogRows.any(json);
         if (!conditions && !rows && !DialogPlaceholders.any(json)) return json;
         Function<String, Optional<String>> lookup = lookup(player, d, values);
+        // A sorted box's order for this player first: it answers the
+        // placeholders its slots' conditions test, as in RP Engine.
+        if (DialogSorts.any(json)) {
+            DialogSorts.Sorted sorted = DialogSorts.apply(json, lookup, player::hasPermission);
+            json = sorted.json();
+            lookup = sorted.over(lookup);
+        }
         String out = conditions ? DialogConditions.strip(json, lookup, player::hasPermission) : json;
         out = DialogPlaceholders.any(out) ? DialogPlaceholders.fill(out, lookup) : out;
         return rows ? DialogRows.strip(out, lookup) : out;
@@ -705,7 +712,14 @@ public final class DrawnDialogs {
      */
     private String visible(Player player, Drawn d, String json, Map<String, String> values) {
         if (!DialogConditions.any(json)) return json;
-        return GSON.toJson(JsonParser.parseString(DialogConditions.strip(json, lookup(player, d, values), player::hasPermission)));
+        Function<String, Optional<String>> lookup = lookup(player, d, values);
+        String sortedJson = json;
+        if (DialogSorts.any(json)) {
+            DialogSorts.Sorted sorted = DialogSorts.apply(json, lookup, player::hasPermission);
+            sortedJson = sorted.json();
+            lookup = sorted.over(lookup);
+        }
+        return GSON.toJson(JsonParser.parseString(DialogConditions.strip(sortedJson, lookup, player::hasPermission)));
     }
 
     /**
