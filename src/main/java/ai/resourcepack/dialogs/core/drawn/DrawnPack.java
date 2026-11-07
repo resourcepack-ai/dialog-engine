@@ -353,6 +353,9 @@ public final class DrawnPack {
      * drawing (a shader, the button sprites), and the last read is kept.
      */
     private static byte[] combine(String name, byte[] had, byte[] mine) {
+        // A dialog's overlay shader: the newest copy, not the last read — an older
+        // drawing's copy lacks fixes a newer one has (DialogShaderRevision).
+        if (DialogShaderRevision.applies(name)) return DialogShaderRevision.pick(had, mine);
         if (java.util.Arrays.equals(had, mine) || !name.endsWith(".json")) return mine;
         try {
             JsonObject a = JsonParser.parseString(new String(had, StandardCharsets.UTF_8)).getAsJsonObject();
