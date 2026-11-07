@@ -108,7 +108,9 @@ def engineDialogs = file("${engineRoot}/core/dialog")
 def sharedDialogs = ['DialogPackets', 'DialogSnbt', 'DialogPlaceholders', 'DialogGlyphWidths', 'DialogRows', 'DialogBars', 'DialogVariables', 'DialogConditions', 'DialogSorts',
                      // The player's inventory in a drawn dialog: its items drawn in the
                      // slots, their tooltips, and moving them (rp slot).
-                     'DialogItems', 'DialogItemIcons', 'DialogItemModels', 'DialogSlots']
+                     'DialogItems', 'DialogItemIcons', 'DialogItemModels', 'DialogSlots',
+                     // Which copy of a dialog's overlay shader to keep when two drawings carry one.
+                     'DialogShaderRevision']
 // What those need from the rest of RP Engine, copied in beside them: the
 // built-in placeholders ({level}, {xp_points}, ...), the item storage a
 // container is kept in, and the three API types the slots name. In this
