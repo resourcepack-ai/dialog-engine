@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.quick;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.quick.JoinCopies;
 import ai.resourcepack.common.quick.QuickActionPack;
 import ai.resourcepack.common.quick.StandIn;
@@ -138,7 +139,16 @@ public final class QuickActions {
         if (copies == null || onKey.values().stream().noneMatch(this::directable)) return;
         Map<String, String> drawn;
         try {
-            drawn = Bukkit.getScheduler().callSyncMethod(engine.plugin(), () -> draw(player, name)).get(5, TimeUnit.SECONDS);
+            java.util.concurrent.CompletableFuture<Map<String, String>> later = new java.util.concurrent.CompletableFuture<>();
+            // The main thread, or on Folia the global region: a stand-in is in no world.
+            Tasks.global(engine.plugin(), () -> {
+                try {
+                    later.complete(draw(player, name));
+                } catch (RuntimeException e) {
+                    later.completeExceptionally(e);
+                }
+            });
+            drawn = later.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
             engine.warnOnce("Could not draw a joining player's quick actions in time, so they get the launcher: " + e);
             return;
@@ -146,7 +156,7 @@ public final class QuickActions {
         copies.put(player, drawn).forEach((id, why) ->
                 engine.warnOnce("The Quick Actions key opens the launcher for " + onKey.get(id).id() + ": the game will not read it as drawn (" + why + ")"));
         // A login refused after this point never reaches quit, so its copies go here.
-        Bukkit.getScheduler().runTaskLater(engine.plugin(), () -> {
+        Tasks.globalLater(engine.plugin(), () -> {
             if (Bukkit.getPlayer(player) == null) forget(player);
         }, 20L * 60);
     }
@@ -208,7 +218,7 @@ public final class QuickActions {
 
     /** A launcher's button: open the dialog it names, if it is one on the key, as if the player had asked. */
     private void launch(Player player, String dialogId) {
-        Bukkit.getScheduler().runTask(engine.plugin(), () -> {
+        Tasks.on(engine.plugin(), player, () -> {
             if (!player.isOnline()) return;
             boolean onIt = onKey.values().stream().anyMatch(d -> d.id().equals(dialogId));
             if (!onIt || !engine.allowClick(player) || !engine.openAsPlayer(player, dialogId, Map.of(), Set.of(), null)) {

@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.click;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.dialogs.api.ActionHandler;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.placeholder.Conditions;
@@ -83,7 +84,7 @@ public final class Actions {
                 long ticks = parseLong(Text.fill(rawArg, ctx.scope(), Text.Mode.RAW), 20);
                 if (!ctx.responded) ctx.finish();
                 int next = i + 1;
-                Bukkit.getScheduler().runTaskLater(engine.plugin(), () -> run(ctx, actions, next), Math.max(1, ticks));
+                Tasks.onLater(engine.plugin(), ctx.player, () -> run(ctx, actions, next), Math.max(1, ticks));
                 return;
             }
             boolean command = COMMAND_TAGS.contains(tag);
@@ -102,6 +103,13 @@ public final class Actions {
                 refuse(ctx, e.key);
                 break;
             }
+            if (tag.equals("console") && !arg.isEmpty() && !Tasks.global()) {
+                // Folia: the console's commands run on the global region only,
+                // and this click is on the player's. The rest of the list
+                // waits for the answer, so a failed one still stops it.
+                consoleThenRest(ctx, actions, i + 1, arg);
+                return;
+            }
             try {
                 if (!builtIn(ctx, tag, arg, rawArg)) {
                     ActionHandler handler = engine.customAction(tag);
@@ -118,6 +126,25 @@ public final class Actions {
             }
         }
         ctx.finish();
+    }
+
+    /** A [console] action run on the global region, then the actions after it back on the player's thread. */
+    private void consoleThenRest(ClickCtx ctx, List<String> actions, int next, String arg) {
+        Tasks.global(engine.plugin(), () -> {
+            boolean ran;
+            try {
+                ran = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), stripSlash(arg));
+            } catch (RuntimeException e) {
+                engine.plugin().getLogger().log(Level.WARNING, "Action [console] on " + ctx.def.id() + " failed", e);
+                ran = false;
+            }
+            boolean ok = ran;
+            Tasks.on(engine.plugin(), ctx.player, () -> {
+                if (!ok) failed(ctx, "console", arg);
+                // Stopped by a failure, this only answers the click.
+                run(ctx, actions, next);
+            });
+        });
     }
 
     /**

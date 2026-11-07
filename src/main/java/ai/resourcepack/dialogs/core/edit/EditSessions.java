@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.edit;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.drawn.DrawnFiles;
 import ai.resourcepack.dialogs.core.placeholder.Text;
@@ -15,7 +16,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -68,7 +68,7 @@ public final class EditSessions {
     private final Engine engine;
     private final JavaPlugin plugin;
     private final Map<String, Live> sessions = new ConcurrentHashMap<>();
-    private BukkitTask poller;
+    private Tasks.Handle poller;
 
     public EditSessions(Engine engine) {
         this.engine = engine;
@@ -147,7 +147,7 @@ public final class EditSessions {
         boolean fresh = spec == null;
         say(sender, (fresh ? "Starting <white>" + dialogId + "</white>" : "Opening <white>" + dialogId + "</white>") + " in the dialog editor...");
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Tasks.async(plugin, () -> {
             try {
                 EditWire.Opened opened = GSON.fromJson(request("POST", "/api/rpengine/session", body, null), EditWire.Opened.class);
                 String link = opened.url == null ? "" : opened.url;
@@ -157,12 +157,12 @@ public final class EditSessions {
                 // The link goes in as a click event, never into the MiniMessage: it came over the network.
                 Component editor = Text.MM.deserialize("<hover:show_text:'Open the dialog editor'><#3670f8><u>open the editor</u></#3670f8></hover>")
                         .clickEvent(ClickEvent.openUrl(link));
-                Bukkit.getScheduler().runTask(plugin, () -> Platform.send(sender, Text.MM.deserialize(
+                Tasks.global(plugin, () -> Platform.send(sender, Text.MM.deserialize(
                         "<#3670f8>Dialog Engine</#3670f8> <dark_gray>»</dark_gray> <gray>Edit <white>" + dialogId + "</white>: "
                                 + "<editor><dark_gray>. The link works once and lasts three hours; press Send to server to bring it back here.</dark_gray>",
                         Placeholder.component("editor", editor))));
             } catch (Exception e) {
-                Bukkit.getScheduler().runTask(plugin, () -> say(sender, "<red>Could not open the editor: " + Text.MM.escapeTags(String.valueOf(e.getMessage()))));
+                Tasks.global(plugin, () -> say(sender, "<red>Could not open the editor: " + Text.MM.escapeTags(String.valueOf(e.getMessage()))));
             }
         });
     }
@@ -171,7 +171,7 @@ public final class EditSessions {
 
     private synchronized void ensurePolling() {
         if (poller != null) return;
-        poller = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::tick, POLL_TICKS, POLL_TICKS);
+        poller = Tasks.asyncTimer(plugin, this::tick, POLL_TICKS, POLL_TICKS);
     }
 
     private void tick() {
@@ -185,7 +185,7 @@ public final class EditSessions {
                 EditWire.Status status = GSON.fromJson(request("GET", "/api/rpengine/session/" + live.id, null, live.pullToken), EditWire.Status.class);
                 if (status.revision <= live.applied) continue;
                 EditWire.Pull pull = GSON.fromJson(request("GET", "/api/rpengine/session/" + live.id + "/files", null, live.pullToken), EditWire.Pull.class);
-                Bukkit.getScheduler().runTask(plugin, () -> apply(live, pull));
+                Tasks.global(plugin, () -> apply(live, pull));
             } catch (Gone gone) {
                 sessions.remove(live.id);
             } catch (Exception e) {
@@ -272,7 +272,7 @@ public final class EditSessions {
         request.dialog.key = name;
         request.dialog.spec = spec;
         String body = GSON.toJson(request);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Tasks.async(plugin, () -> {
             String error = null;
             try {
                 EditWire.Pull pull = GSON.fromJson(request("POST", "/api/rpengine/build", body, null), EditWire.Pull.class);
@@ -284,7 +284,7 @@ public final class EditSessions {
                 error = String.valueOf(e.getMessage());
             }
             String result = error;
-            Bukkit.getScheduler().runTask(plugin, () -> done.accept(result));
+            Tasks.global(plugin, () -> done.accept(result));
         });
     }
 

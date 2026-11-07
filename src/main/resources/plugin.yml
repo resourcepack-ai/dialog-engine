@@ -2,6 +2,7 @@ name: DialogEngine
 version: '${version}'
 main: ai.resourcepack.dialogs.DialogEnginePlugin
 api-version: '1.21'
+folia-supported: true
 author: ResourcePack AI
 website: https://resourcepack.ai
 description: Minecraft's dialog screens, written in YAML and driven from Java.

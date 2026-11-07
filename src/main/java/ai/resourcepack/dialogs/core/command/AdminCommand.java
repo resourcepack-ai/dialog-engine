@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.command;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.drawn.DrawnDialogs;
@@ -41,6 +42,9 @@ public final class AdminCommand implements TabExecutor {
     /** What opening a dialog on a player other than yourself needs, on top of {@code dialogengine.open}. */
     public static final String OPEN_OTHERS = "dialogengine.open.others";
 
+    /** The subcommands that run on Folia's global region rather than the region of whoever typed them. */
+    private static final List<String> GLOBAL = List.of("reload", "edit", "pack");
+
     private final Engine engine;
 
     public AdminCommand(Engine engine) {
@@ -56,6 +60,12 @@ public final class AdminCommand implements TabExecutor {
         String sub = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
         if (SUBCOMMANDS.contains(sub) && !sender.hasPermission(permissionFor(sub))) {
             say(sender, "<red>You need " + permissionFor(sub) + " for that.");
+            return true;
+        }
+        if (GLOBAL.contains(sub) && !Tasks.global()) {
+            // Folia, typed by a player (on their region): these read and write
+            // the whole server's dialogs, so they run on the global region.
+            Tasks.global(engine.plugin(), () -> onCommand(sender, command, label, args));
             return true;
         }
         switch (sub) {
@@ -139,13 +149,18 @@ public final class AdminCommand implements TabExecutor {
                     say(sender, "<red>There is no dialog called " + Text.MM.escapeTags(id) + ". <gray>/de list");
                     return true;
                 }
-                if (engine.drawn.has(id)) {
-                    if (!engine.drawn.open(target, id, values, values.keySet())) say(sender, "<red>It did not open; the console says why.");
-                    return true;
-                }
-                // Typed by staff, but still typed: escape it where it is printed.
-                Session s = new Session(target.getUniqueId(), id, values, new HashSet<>(values.keySet()), null);
-                if (!engine.show(target, s, false)) say(sender, "<red>It did not open (an event cancelled it, or it is broken).");
+                Player to = target;
+                // Folia: drawn on the target's own region, which the console's
+                // (or another player's) is not.
+                Tasks.now(engine.plugin(), to, () -> {
+                    if (engine.drawn.has(id)) {
+                        if (!engine.drawn.open(to, id, values, values.keySet())) say(sender, "<red>It did not open; the console says why.");
+                        return;
+                    }
+                    // Typed by staff, but still typed: escape it where it is printed.
+                    Session s = new Session(to.getUniqueId(), id, values, new HashSet<>(values.keySet()), null);
+                    if (!engine.show(to, s, false)) say(sender, "<red>It did not open (an event cancelled it, or it is broken).");
+                });
             }
             case "info" -> {
                 if (args.length < 2) {

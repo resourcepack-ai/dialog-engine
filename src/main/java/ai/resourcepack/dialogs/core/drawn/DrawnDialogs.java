@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.quick.StandIn;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
@@ -806,20 +807,20 @@ public final class DrawnDialogs {
         if (picture(json, command) || picture(seen, command)) clickSound(player, d, shown, command);
         if (args[0].equalsIgnoreCase("page") && args.length == 2) {
             String page = args[1].toLowerCase(Locale.ROOT);
-            Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
+            Tasks.on(engine.plugin(), player, () -> showPage(player, d, page, shown.session));
         } else if (args[0].equalsIgnoreCase("var") && args.length >= 3) {
             String name = args[1].toLowerCase(Locale.ROOT);
             String value = args[2];
             if (!d.vars.getOrDefault(name, Set.of()).contains(value)) return;
             variables().set(player, name, value);
             String page = args.length >= 4 ? args[3].toLowerCase(Locale.ROOT) : shown.page;
-            Bukkit.getScheduler().runTask(engine.plugin(), () -> showPage(player, d, page, shown.session));
+            Tasks.on(engine.plugin(), player, () -> showPage(player, d, page, shown.session));
         } else if (args[0].equalsIgnoreCase("slot") && args.length == 2) {
             // A live slot's click: picks a stack up or puts it down (RP Engine's
             // DialogSlots), then the page again with the items where they now are.
             Optional<DialogSlots.Key> key = DialogSlots.Key.parse(args[1]);
             if (key.isEmpty()) return;
-            Bukkit.getScheduler().runTask(engine.plugin(), () -> {
+            Tasks.on(engine.plugin(), player, () -> {
                 slots().click(player, contentId(d.id), key.get());
                 showPage(player, d, shown.page, shown.session);
             });
@@ -831,7 +832,7 @@ public final class DrawnDialogs {
                 return;
             }
             if (n < 0 || n >= d.actions.size()) return;
-            Bukkit.getScheduler().runTask(engine.plugin(), () -> {
+            Tasks.on(engine.plugin(), player, () -> {
                 // The player's settings are values too, so an action can say {silent}.
                 Map<String, String> values = new LinkedHashMap<>(shown.session.values);
                 for (String var : d.vars.keySet()) variables().get(player, var).ifPresent(v -> values.putIfAbsent(var, v));
@@ -967,7 +968,7 @@ public final class DrawnDialogs {
             map.register("dialogengine", cmd);
             commands.add(cmd);
         }
-        for (Player p : Bukkit.getOnlinePlayers()) p.updateCommands();
+        for (Player p : Bukkit.getOnlinePlayers()) Tasks.now(engine.plugin(), p, p::updateCommands);
     }
 
     // ------------------------------------------------------------------ redrawing

@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.command;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.platform.Platform;
 import ai.resourcepack.dialogs.core.yaml.Defs.DialogDef;
@@ -84,7 +85,7 @@ public final class OpenCommands {
     private void refreshClients() {
         if (!plugin.isEnabled()) return;
         // So a removed command stops tab-completing and a new one starts.
-        Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getOnlinePlayers().forEach(Player::updateCommands));
+        Tasks.global(plugin, () -> Bukkit.getOnlinePlayers().forEach(p -> Tasks.now(plugin, p, p::updateCommands)));
     }
 
     private static String owner(Command c) {
@@ -119,11 +120,10 @@ public final class OpenCommands {
                 values.put(names.get(i), value);
                 untrusted.add(names.get(i));
             }
-            if (args.length < names.size() && def.ifMissing() != null) {
-                engine.openAsPlayer(player, def.ifMissing(), values, untrusted, null);
-                return true;
-            }
-            engine.openAsPlayer(player, dialogId, values, untrusted, null);
+            String open = args.length < names.size() && def.ifMissing() != null ? def.ifMissing() : dialogId;
+            // Folia: run as a player from the console (execute as), which is
+            // on the global region; the dialog is drawn on the player's.
+            Tasks.now(plugin, player, () -> engine.openAsPlayer(player, open, values, untrusted, null));
             return true;
         }
 

@@ -11,8 +11,8 @@ menus on.
   placeholders and lists, and hear every press of a YAML dialog's buttons as an
   event.
 
-Runs on **Spigot or Paper 1.21.7 or newer**, one jar for both, with players
-on a 1.21.6+ client.
+Runs on **Spigot, Paper or Folia 1.21.7 or newer**, one jar for all three,
+with players on a 1.21.6+ client.
 [PlaceholderAPI](https://www.spigotmc.org/resources/6245/) is optional.
 
 ## Installing
