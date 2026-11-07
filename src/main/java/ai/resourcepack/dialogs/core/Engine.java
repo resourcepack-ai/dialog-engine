@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core;
 
+import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.dialogs.api.ActionHandler;
 import ai.resourcepack.dialogs.api.DialogContext;
 import ai.resourcepack.dialogs.api.DialogEngineAPI;
@@ -228,7 +229,7 @@ public final class Engine implements DialogEngineAPI {
         if (!drawnPack.onJoin()) return;
         if (drawnPack.merged()) {
             awaitingOthers.add(player.getUniqueId());
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            Tasks.onLater(plugin, player, () -> {
                 // The same session: a rejoin inside the wait has a wait of its own.
                 if (plugin.getServer().getPlayer(player.getUniqueId()) == player
                         && awaitingOthers.remove(player.getUniqueId())) drawnPack.send(player);
@@ -258,7 +259,7 @@ public final class Engine implements DialogEngineAPI {
             return;
         }
         if (drawnPack.sentTo(player)) {
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Tasks.on(plugin, player, () -> {
                 if (player.isOnline() && drawnPack.resend(player)) {
                     plugin.getLogger().info("Another plugin sent " + player.getName() + " a resource pack after the drawn"
                             + " dialog pack, so it was sent again, on top of it.");
@@ -493,7 +494,7 @@ public final class Engine implements DialogEngineAPI {
             if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player);
         };
         if (delay == 0) close.run();
-        else Bukkit.getScheduler().runTaskLater(plugin, close, delay);
+        else Tasks.onLater(plugin, player, close, delay);
     }
 
     /**
@@ -639,8 +640,8 @@ public final class Engine implements DialogEngineAPI {
      */
     public void onClick(Player player, long drawing, DialogDef def, ButtonDef button, Session session, String alias, Map<String, String> row,
                  List<InputDef> inputs, Map<String, Map<String, String>> optionLabels, Clicks.Payload view) {
-        if (!Bukkit.isPrimaryThread()) {
-            Bukkit.getScheduler().runTask(plugin, () -> onClick(player, drawing, def, button, session, alias, row, inputs, optionLabels, view));
+        if (!Tasks.owns(player)) {
+            Tasks.on(plugin, player, () -> onClick(player, drawing, def, button, session, alias, row, inputs, optionLabels, view));
             return;
         }
         if (!player.isOnline() || !player.getUniqueId().equals(session.viewer)) return;
@@ -820,6 +821,14 @@ public final class Engine implements DialogEngineAPI {
     @Override
     public boolean open(Player player, String dialogId, Map<String, String> values) {
         if (player == null || !player.isOnline()) return false;
+        if (Tasks.folia() && !Tasks.owns(player)) {
+            // Folia: drawn on the player's own region. Shown a tick later, so
+            // the answer is a guess; a dialog that does not exist is still no.
+            String known = dialogId.toLowerCase(Locale.ROOT);
+            if (!drawn.has(known) && !dialogs.containsKey(known)) return false;
+            Tasks.on(plugin, player, () -> open(player, dialogId, values));
+            return true;
+        }
         String id = dialogId.toLowerCase(Locale.ROOT);
         if (drawn.has(id)) return drawn.open(player, id, values, Set.of());
         if (!dialogs.containsKey(id)) return false;

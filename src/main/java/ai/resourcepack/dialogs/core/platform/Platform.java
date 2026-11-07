@@ -215,6 +215,18 @@ public final class Platform {
      */
     private static String dialogCommand(Player player, String rest) {
         String command = "minecraft:execute as " + player.getUniqueId() + " run minecraft:dialog " + rest;
+        if (!ai.resourcepack.common.scheduler.Tasks.global()) {
+            // Folia: the console's commands run on the global region only. Sent
+            // there, so the answer is a guess; a refusal reaches the log.
+            ai.resourcepack.common.scheduler.Tasks.global(org.bukkit.plugin.java.JavaPlugin.getProvidingPlugin(Platform.class), () -> {
+                try {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                } catch (RuntimeException e) {
+                    Bukkit.getLogger().warning("[DialogEngine] /dialog " + rest.split(" ")[0] + " for " + player.getName() + " failed: " + e.getMessage());
+                }
+            });
+            return null;
+        }
         try {
             return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command) ? null : "the server did not run /dialog";
         } catch (RuntimeException e) {
