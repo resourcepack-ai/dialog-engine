@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /** One button press while its actions run. */
 public final class ClickCtx implements ClickContext {
@@ -26,6 +27,8 @@ public final class ClickCtx implements ClickContext {
     private final Map<String, String> inputs;
     private final String alias;
     private final Map<String, String> row;
+    /** Asked for a name nothing else in the click's scope knows; null for nowhere. */
+    private Function<String, String> more;
 
     /** Something has answered the click: a dialog was shown or the screen was closed. */
     public boolean responded;
@@ -53,7 +56,17 @@ public final class ClickCtx implements ClickContext {
 
     Scope scope() {
         Scope s = new Scope(engine, player, def.id(), session.values, session.untrusted, null, null);
+        if (more != null) s = s.withMore(more);
         return alias == null || row.isEmpty() ? s : s.withRow(alias, row);
+    }
+
+    /**
+     * A drawn dialog's click: its actions are filled from what its picture was
+     * filled from as well ({@link Scope#withMore}), so a name the screen printed
+     * is the same name in the command.
+     */
+    public void alsoFrom(Function<String, String> more) {
+        this.more = more;
     }
 
     /** What the click's screen was sent as, when that is not its dialog's {@code after}. */

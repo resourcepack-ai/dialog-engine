@@ -70,6 +70,16 @@ import java.util.regex.Pattern;
  * filled when it is clicked rather than baked into what the player holds, and
  * a drawn dialog is a session like any other ({@code [back]}, the API's events).
  * Several actions in one command are written {@code [a] ...; [b] ...}.
+ *
+ * <p><b>A click's actions are filled from what the picture was filled from.</b>
+ * The picture reads a name from RP Engine's built-ins and from PlaceholderAPI by
+ * its bare name ({@code {vault_eco_balance}}); an action's own scope knows
+ * neither, so a list whose rows PlaceholderAPI fills printed each player's name
+ * on its row and ran {@code party invite {player_list_1}} as written. The click
+ * now asks those too ({@link ClickCtx#alsoFrom}), and a list row's numbered name
+ * is answered with what that row SHOWED ({@link Shown#rows}), kept as the page
+ * was drawn: a list that moved between the drawing and the click must not
+ * invite, or punish, whoever is on the row now.
  */
 public final class DrawnDialogs {
 
@@ -96,6 +106,12 @@ public final class DrawnDialogs {
         return List.copyOf(out);
     }
     private static final Pattern NEXT_ACTION = Pattern.compile(";\\s*(?=\\[)");
+    /** An action click's number in a page as stored. */
+    private static final Pattern ACT_INDEX = Pattern.compile("\"command\":\"/?" + CLICK + " act (\\d+)\"");
+    /** A placeholder in an action as {@code Text} reads one: {@code {name}}, {@code {name|filter}}, {@code {name?a:b|c}}. */
+    private static final Pattern ACTION_NAME = Pattern.compile("\\{([A-Za-z0-9_.:-]{1,64})(?:[|?][^{}]*)?}");
+    /** A list row's numbered name, as Studio draws one (RP Engine's DialogRows): {@code warps_3}, {@code warps_3_note}. */
+    private static final Pattern ROW_NAME = Pattern.compile("^([A-Za-z0-9_]+?)_(\\d{1,3})(?:_([A-Za-z0-9_]+))?$");
     /** An action click as it is kept, which {@link #showPage} gives the drawing's nonce. */
     private static final Pattern ACT_CLICK = Pattern.compile("(\"command\":\"/?" + CLICK + " act \\d+)\"");
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -110,7 +126,8 @@ public final class DrawnDialogs {
      */
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
-                 Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds, Map<String, Integer> itemIcons) {
+                 Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds, Map<String, Integer> itemIcons,
+                 Map<String, Set<String>> rowNames) {
 
         /** What a click on this page waits for: what has to answer it. */
         Defs.After answering(String page) {
@@ -136,14 +153,17 @@ public final class DrawnDialogs {
      * says the player held the dialog's permission when it was drawn, so losing
      * it since stops the clicks; {@code live} is false once the dialog has gone
      * from their screen, when it is kept only to reopen on the same page.
+     * {@code rows} is what each list row its clicks name showed, by the row's
+     * numbered name ({@link #rowValues}): what an action on that row acts on.
      */
-    private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live, String json) {
+    private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live, String json,
+                         Map<String, String> rows) {
         Shown used() {
-            return new Shown(drawn, page, session, null, permitted, at, live, json);
+            return new Shown(drawn, page, session, null, permitted, at, live, json, rows);
         }
 
         Shown retired() {
-            return new Shown(drawn, page, session, null, permitted, at, false, json);
+            return new Shown(drawn, page, session, null, permitted, at, false, json, rows);
         }
     }
 
@@ -166,7 +186,7 @@ public final class DrawnDialogs {
      * Quick Actions key: the page as stored when it was drawn ({@code source}),
      * and as sent, with its own nonce.
      */
-    private record Copy(String page, String source, Session session, String nonce, String json) {}
+    private record Copy(String page, String source, Session session, String nonce, String json, Map<String, String> rows) {}
 
     public DrawnDialogs(Engine engine) {
         this.engine = engine;
@@ -305,6 +325,7 @@ public final class DrawnDialogs {
         List<List<String>> actions = new ArrayList<>();
         List<String> refused = new ArrayList<>();
         Map<String, JsonObject> written = new LinkedHashMap<>();
+        Map<String, Set<String>> rowNames = new LinkedHashMap<>();
         Map<String, Integer> itemIcons = new HashMap<>();
         String first = null;
         String ns = id.substring(0, id.indexOf(':'));
@@ -323,6 +344,7 @@ public final class DrawnDialogs {
             JsonElement rewritten = rewrite(json, actions, allowed, consoles, refused, link -> opensHere(link, ns));
             if (move != null) rewritten = DrawnGlyphs.movePage(rewritten, move);
             pages.put(studioId, GSON.toJson(rewritten));
+            rowNames.put(studioId, rowNames(pages.get(studioId), actions));
             written.put(studioId, page);
             // The pack's own items' cells in its item sheet, by model id: what a
             // live slot draws one of the pack's items as (RP Engine's itemIcons).
@@ -362,7 +384,46 @@ public final class DrawnDialogs {
             if (s != null) sounds.put(studioId, s);
         });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
-                Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds), Map.copyOf(itemIcons));
+                Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds), Map.copyOf(itemIcons),
+                Map.copyOf(rowNames));
+    }
+
+    /**
+     * The list rows a page's action clicks name, by their numbered names: every
+     * {@code {warps_3}} in an action one of the page's clicks runs. A row's
+     * command says which row it is on by that number and nothing else, so these
+     * are the values {@link #rowValues} keeps as the page is drawn.
+     */
+    static Set<String> rowNames(String page, List<List<String>> actions) {
+        Set<String> out = new LinkedHashSet<>();
+        Matcher click = ACT_INDEX.matcher(page);
+        while (click.find()) {
+            int n;
+            try {
+                n = Integer.parseInt(click.group(1));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (n < 0 || n >= actions.size()) continue;
+            for (String action : actions.get(n)) {
+                Matcher name = ACTION_NAME.matcher(action);
+                while (name.find()) if (ROW_NAME.matcher(name.group(1)).matches()) out.add(name.group(1));
+            }
+        }
+        return Set.copyOf(out);
+    }
+
+    /**
+     * Whether a row's value came out of words a player typed: its list was
+     * given whole to whoever opened the dialog ({@code warps=a,b}) under a name
+     * that is untrusted. Such a row is not answered for an action at all, as
+     * before: handed over as a list row's value it would be trusted.
+     */
+    static boolean fromTyped(String rowName, Set<String> untrusted) {
+        Matcher m = ROW_NAME.matcher(rowName);
+        if (!m.matches()) return false;
+        for (String key : untrusted) if (key.equalsIgnoreCase(m.group(1))) return true;
+        return false;
     }
 
     /** A sound event as a server takes one; Studio's {@code CLICK_SOUND_EVENT} is the same rule. */
@@ -608,7 +669,11 @@ public final class DrawnDialogs {
         String nonce = nonce();
         json = ACT_CLICK.matcher(json).replaceAll("$1 " + nonce + "\"");
         Shown before = lastShown.get(player.getUniqueId());
-        json = filled(player, d, json, session.values);
+        // One set of answers for the picture and for what its rows' clicks will
+        // act on: each name is asked once, so the two cannot disagree.
+        Function<String, Optional<String>> lookup = once(lookup(player, d, session.values));
+        json = filled(player, json, lookup);
+        Map<String, String> rows = rowValues(d, page, session, lookup);
         json = DialogBars.fill(json);
         // The player's own items into the live slots, after the placeholders and
         // bars, as RP Engine does: a slot reached by a page turn or a move keeps
@@ -619,7 +684,7 @@ public final class DrawnDialogs {
             json = DialogItems.fill(json, slots().reader(player), slots().held(player, cid).orElse(null), d.itemIcons);
         }
         boolean permitted = d.permission == null || player.hasPermission(d.permission);
-        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json));
+        lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json, rows));
         if (Platform.showJson(player, json, engine.plugin().getLogger())) {
             engine.replacedScreen(player);
             return true;
@@ -648,9 +713,10 @@ public final class DrawnDialogs {
         String nonce = nonce();
         Session session = new Session(standIn.getUniqueId(), d.id, Map.of(), Set.of(), null);
         String json = ACT_CLICK.matcher(source).replaceAll("$1 " + nonce + "\"");
-        json = DialogBars.fill(filled(standIn, d, json, session.values));
+        Function<String, Optional<String>> lookup = once(lookup(standIn, d, session.values));
+        json = DialogBars.fill(filled(standIn, json, lookup));
         quickCopies.computeIfAbsent(standIn.getUniqueId(), k -> new ConcurrentHashMap<>())
-                .put(d.id, new Copy(d.first, source, session, nonce, json));
+                .put(d.id, new Copy(d.first, source, session, nonce, json, rowValues(d, d.first, session, lookup)));
         return json;
     }
 
@@ -676,7 +742,7 @@ public final class DrawnDialogs {
             Copy copy = e.getValue();
             Drawn d = dialogs.get(e.getKey());
             if (d == null || !copy.source.equals(d.pages.get(copy.page)) || !holds(copy.json, sent)) continue;
-            Shown adopted = new Shown(d.id, copy.page, copy.session, copy.nonce, true, System.currentTimeMillis(), true, copy.json);
+            Shown adopted = new Shown(d.id, copy.page, copy.session, copy.nonce, true, System.currentTimeMillis(), true, copy.json, copy.rows);
             lastShown.put(player.getUniqueId(), adopted);
             return adopted;
         }
@@ -688,11 +754,10 @@ public final class DrawnDialogs {
      * ("show when") are emptied, so nothing in one is looked up and no marker
      * in one is left for the passes after this.
      */
-    private String filled(Player player, Drawn d, String json, Map<String, String> values) {
+    private String filled(Player player, String json, Function<String, Optional<String>> lookup) {
         boolean conditions = DialogConditions.any(json);
         boolean rows = DialogRows.any(json);
         if (!conditions && !rows && !DialogPlaceholders.any(json)) return json;
-        Function<String, Optional<String>> lookup = lookup(player, d, values);
         // A sorted box's order for this player first: it answers the
         // placeholders its slots' conditions test, as in RP Engine.
         if (DialogSorts.any(json)) {
@@ -703,6 +768,52 @@ public final class DrawnDialogs {
         String out = conditions ? DialogConditions.strip(json, lookup, player::hasPermission) : json;
         out = DialogPlaceholders.any(out) ? DialogPlaceholders.fill(out, lookup) : out;
         return rows ? DialogRows.strip(out, lookup) : out;
+    }
+
+    /** {@code lookup}, each name asked once: its answer is kept for as long as this drawing is being made. */
+    private static Function<String, Optional<String>> once(Function<String, Optional<String>> lookup) {
+        Map<String, Optional<String>> asked = new HashMap<>();
+        return name -> asked.computeIfAbsent(name, lookup);
+    }
+
+    /**
+     * What each list row a page's clicks name shows in this drawing, by the
+     * row's numbered name: the answers the picture was just filled with. Kept
+     * on the drawing ({@link Shown#rows}) so a click on row 3 acts on who row 3
+     * showed, whatever the list holds by then. A row past the end of its list
+     * (blank) has no click to answer, and one whose list was typed is left out
+     * ({@link #fromTyped}).
+     */
+    private static Map<String, String> rowValues(Drawn d, String page, Session session, Function<String, Optional<String>> lookup) {
+        Set<String> names = d.rowNames.getOrDefault(page, Set.of());
+        if (names.isEmpty()) return Map.of();
+        Map<String, String> out = new HashMap<>();
+        for (String name : names) {
+            if (fromTyped(name, session.untrusted)) continue;
+            lookup.apply(name).filter(v -> !v.isBlank()).ifPresent(v -> out.put(name, v));
+        }
+        return Map.copyOf(out);
+    }
+
+    /**
+     * What a click's actions ask when their own scope does not know a name:
+     * the row the click is on, as it was shown, then the two places the picture
+     * reads that an action's scope does not, RP Engine's built-ins and
+     * PlaceholderAPI by the bare name. Null for a name none of them knows,
+     * which is then left as written, as before.
+     *
+     * <p>Not RP Engine's {@code {displayname}}: it is whatever a nickname plugin
+     * let the player type, and what this answers is trusted. An action that
+     * wants it says {@code {player_display}}, which a command checks.
+     */
+    static Function<String, String> pictureAnswers(Player player, Map<String, String> rows) {
+        return name -> {
+            String row = rows.get(name);
+            if (row != null) return row;
+            if (name.equalsIgnoreCase("displayname")) return null;
+            Optional<String> builtIn = Placeholders.lookup(player, name, null);
+            return builtIn.isPresent() ? builtIn.get() : Papi.lookup(player, name);
+        };
     }
 
     /**
@@ -838,6 +949,9 @@ public final class DrawnDialogs {
                 for (String var : d.vars.keySet()) variables().get(player, var).ifPresent(v -> values.putIfAbsent(var, v));
                 Session session = shown.session.with(values, shown.session.untrusted);
                 ClickCtx ctx = new ClickCtx(engine, player, d.def, session, "act_" + n, Map.of(), null, null);
+                // A name the picture printed is the same name in the command: the
+                // row as it was shown, RP Engine's built-ins, PlaceholderAPI.
+                ctx.alsoFrom(pictureAnswers(player, shown.rows));
                 // A page that waits, or is seamless, is answered when its actions
                 // end (ClickCtx.finish): by the next dialog, or by a close.
                 ctx.answering(d.answering(shown.page));

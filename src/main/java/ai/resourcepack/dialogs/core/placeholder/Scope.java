@@ -8,11 +8,16 @@ import org.bukkit.entity.Player;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Where a placeholder is looked up: the row a for-each is drawing, then the
  * dialog's own values, then the engine's built-ins, then the resolvers other
  * plugins registered. A name nothing knows is left as written.
+ *
+ * <p>A drawn dialog's click asks one more place, last ({@link #withMore}): what
+ * its picture was filled from that none of those know. Without it a name the
+ * picture printed was left as written in the command the click ran.
  */
 public final class Scope implements DialogContext {
 
@@ -23,9 +28,17 @@ public final class Scope implements DialogContext {
     final Set<String> untrusted;
     public final String alias;
     public final Map<String, String> row;
+    /** Asked when nothing else knows a name; null for nowhere. See {@link #withMore}. */
+    private final Function<String, String> more;
 
     public Scope(Engine engine, Player viewer, String dialogId, Map<String, String> values, Set<String> untrusted,
           String alias, Map<String, String> row) {
+        this(engine, viewer, dialogId, values, untrusted, alias, row, null);
+    }
+
+    private Scope(Engine engine, Player viewer, String dialogId, Map<String, String> values, Set<String> untrusted,
+          String alias, Map<String, String> row, Function<String, String> more) {
+        this.more = more;
         this.engine = engine;
         this.viewer = viewer;
         this.dialogId = dialogId;
@@ -36,7 +49,17 @@ public final class Scope implements DialogContext {
     }
 
     public Scope withRow(String alias, Map<String, String> row) {
-        return new Scope(engine, viewer, dialogId, values, untrusted, alias, row);
+        return new Scope(engine, viewer, dialogId, values, untrusted, alias, row, more);
+    }
+
+    /**
+     * This scope, asking {@code more} for a name nothing else here knows (it
+     * answers null for one it does not know either). What it answers is
+     * trusted, like a plugin's or PlaceholderAPI's value: never hand it words a
+     * player typed.
+     */
+    public Scope withMore(Function<String, String> more) {
+        return new Scope(engine, viewer, dialogId, values, untrusted, alias, row, more);
     }
 
     /** The value for {@code key}, or null when nothing knows it. */
@@ -53,7 +76,8 @@ public final class Scope implements DialogContext {
         if (v != null) return v;
         v = builtIn(key);
         if (v != null) return v;
-        return engine == null ? null : engine.resolvePlaceholder(viewer, this, key);
+        v = engine == null ? null : engine.resolvePlaceholder(viewer, this, key);
+        return v != null || more == null ? v : more.apply(key);
     }
 
     boolean isUntrusted(String key) {
