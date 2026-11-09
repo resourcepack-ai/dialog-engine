@@ -80,6 +80,27 @@ class TextTest {
         assertEquals("a\\\\\\\"b", Text.fill("{typed|json}", scope(Map.of("typed", "a\"b")), Text.Mode.JSON));
     }
 
+    /**
+     * A drawn dialog's click asks what its picture was filled from, last
+     * ({@link Scope#withMore}): a list row PlaceholderAPI answered printed the
+     * player's name and ran "party invite {player_list_1}" as written.
+     */
+    @Test
+    void aNameOnlyThePictureKnowsIsAskedLast() {
+        Scope scope = scope(Map.of("target", "Steve")).withMore(name -> switch (name) {
+            case "player_list_1" -> "Alex";
+            case "target" -> "Nobody";
+            default -> null;
+        });
+        assertEquals("party invite Alex", Text.fill("party invite {player_list_1}", scope, Text.Mode.COMMAND));
+        assertEquals("kick Steve", Text.fill("kick {target}", scope, Text.Mode.COMMAND), "the dialog's own value still comes first");
+        assertEquals("say {nobody_knows}", Text.fill("say {nobody_knows}", scope, Text.Mode.COMMAND), "a name nothing knows is left as written");
+        assertEquals("invite Alex", Text.fill("invite {player_list_1}", scope.withRow("row", Map.of("value", "x")), Text.Mode.COMMAND),
+                "a row's scope asks it too");
+        assertEquals("party invite {player_list_1}", command("party invite {player_list_1}", Map.of("target", "Steve")),
+                "and without it, as before");
+    }
+
     @Test
     void safeIsANameANumberOrAnId() {
         assertTrue(Text.safe("Notch"));
