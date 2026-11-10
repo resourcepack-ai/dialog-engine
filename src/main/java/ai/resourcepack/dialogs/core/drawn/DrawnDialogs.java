@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -79,7 +80,9 @@ import java.util.regex.Pattern;
  * now asks those too ({@link ClickCtx#alsoFrom}), and a list row's numbered name
  * is answered with what that row SHOWED ({@link Shown#rows}), kept as the page
  * was drawn: a list that moved between the drawing and the click must not
- * invite, or punish, whoever is on the row now.
+ * invite, or punish, whoever is on the row now. That is every list, whoever
+ * fills it: PlaceholderAPI, a plugin, or whoever opened the dialog
+ * ({@code warps=Spawn,Shop}), whose rows stay their words ({@link Rows#typed}).
  */
 public final class DrawnDialogs {
 
@@ -157,7 +160,7 @@ public final class DrawnDialogs {
      * numbered name ({@link #rowValues}): what an action on that row acts on.
      */
     private record Shown(String drawn, String page, Session session, String nonce, boolean permitted, long at, boolean live, String json,
-                         Map<String, String> rows) {
+                         Rows rows) {
         Shown used() {
             return new Shown(drawn, page, session, null, permitted, at, live, json, rows);
         }
@@ -186,7 +189,17 @@ public final class DrawnDialogs {
      * Quick Actions key: the page as stored when it was drawn ({@code source}),
      * and as sent, with its own nonce.
      */
-    private record Copy(String page, String source, Session session, String nonce, String json, Map<String, String> rows) {}
+    private record Copy(String page, String source, Session session, String nonce, String json, Rows rows) {}
+
+    /**
+     * What the list rows a drawing's clicks name showed, by each row's numbered
+     * name ({@link #rowValues}). {@code typed} names the ones whose list was
+     * given whole by whoever opened the dialog ({@code warps=Spawn,Shop}): those
+     * are a player's words, and the click hands them to its actions as such.
+     */
+    record Rows(Map<String, String> values, Set<String> typed) {
+        static final Rows NONE = new Rows(Map.of(), Set.of());
+    }
 
     public DrawnDialogs(Engine engine) {
         this.engine = engine;
@@ -416,8 +429,9 @@ public final class DrawnDialogs {
     /**
      * Whether a row's value came out of words a player typed: its list was
      * given whole to whoever opened the dialog ({@code warps=a,b}) under a name
-     * that is untrusted. Such a row is not answered for an action at all, as
-     * before: handed over as a list row's value it would be trusted.
+     * that is untrusted. Such a row is answered like any other, but as their
+     * words ({@link Rows#typed}): a command takes it only as a name, a number
+     * or an id, unless the dialog's author filtered it.
      */
     static boolean fromTyped(String rowName, Set<String> untrusted) {
         Matcher m = ROW_NAME.matcher(rowName);
@@ -673,7 +687,7 @@ public final class DrawnDialogs {
         // act on: each name is asked once, so the two cannot disagree.
         Function<String, Optional<String>> lookup = once(lookup(player, d, session.values));
         json = filled(player, json, lookup);
-        Map<String, String> rows = rowValues(d, page, session, lookup);
+        Rows rows = rowValues(d.rowNames.getOrDefault(page, Set.of()), session.untrusted, lookup);
         json = DialogBars.fill(json);
         // The player's own items into the live slots, after the placeholders and
         // bars, as RP Engine does: a slot reached by a page turn or a move keeps
@@ -716,7 +730,8 @@ public final class DrawnDialogs {
         Function<String, Optional<String>> lookup = once(lookup(standIn, d, session.values));
         json = DialogBars.fill(filled(standIn, json, lookup));
         quickCopies.computeIfAbsent(standIn.getUniqueId(), k -> new ConcurrentHashMap<>())
-                .put(d.id, new Copy(d.first, source, session, nonce, json, rowValues(d, d.first, session, lookup)));
+                .put(d.id, new Copy(d.first, source, session, nonce, json,
+                        rowValues(d.rowNames.getOrDefault(d.first, Set.of()), session.untrusted, lookup)));
         return json;
     }
 
@@ -777,22 +792,30 @@ public final class DrawnDialogs {
     }
 
     /**
-     * What each list row a page's clicks name shows in this drawing, by the
-     * row's numbered name: the answers the picture was just filled with. Kept
-     * on the drawing ({@link Shown#rows}) so a click on row 3 acts on who row 3
-     * showed, whatever the list holds by then. A row past the end of its list
-     * (blank) has no click to answer, and one whose list was typed is left out
-     * ({@link #fromTyped}).
+     * What each list row a page's clicks name ({@code names}) shows in this
+     * drawing, by the row's numbered name: the answers the picture was just
+     * filled with. Kept on the drawing ({@link Shown#rows}) so a click on row 3
+     * acts on who row 3 showed, whatever the list holds by then. A row past the
+     * end of its list (blank) has no click to answer.
+     *
+     * <p>A row whose list was typed by whoever opened the dialog
+     * ({@link #fromTyped}; {@code untrusted} is the session's) is kept too, and
+     * named in {@link Rows#typed}. Until 0.7.1 it was left out, since what a
+     * click's actions were handed this way was trusted, and the docs' own way
+     * to fill a list ({@code warps=Spawn,Shop,Arena}) ran {@code warp {warps_1}}
+     * as written.
      */
-    private static Map<String, String> rowValues(Drawn d, String page, Session session, Function<String, Optional<String>> lookup) {
-        Set<String> names = d.rowNames.getOrDefault(page, Set.of());
-        if (names.isEmpty()) return Map.of();
-        Map<String, String> out = new HashMap<>();
+    static Rows rowValues(Set<String> names, Set<String> untrusted, Function<String, Optional<String>> lookup) {
+        if (names.isEmpty()) return Rows.NONE;
+        Map<String, String> values = new HashMap<>();
+        Set<String> typed = new HashSet<>();
         for (String name : names) {
-            if (fromTyped(name, session.untrusted)) continue;
-            lookup.apply(name).filter(v -> !v.isBlank()).ifPresent(v -> out.put(name, v));
+            Optional<String> shown = lookup.apply(name).filter(v -> !v.isBlank());
+            if (shown.isEmpty()) continue;
+            values.put(name, shown.get());
+            if (fromTyped(name, untrusted)) typed.add(name);
         }
-        return Map.copyOf(out);
+        return new Rows(Map.copyOf(values), Set.copyOf(typed));
     }
 
     /**
@@ -804,7 +827,9 @@ public final class DrawnDialogs {
      *
      * <p>Not RP Engine's {@code {displayname}}: it is whatever a nickname plugin
      * let the player type, and what this answers is trusted. An action that
-     * wants it says {@code {player_display}}, which a command checks.
+     * wants it says {@code {player_display}}, which a command checks. A typed
+     * list's row is the one answer here that is a player's words, and the
+     * click names it untrusted itself ({@link #click}).
      */
     static Function<String, String> pictureAnswers(Player player, Map<String, String> rows) {
         return name -> {
@@ -947,11 +972,17 @@ public final class DrawnDialogs {
                 // The player's settings are values too, so an action can say {silent}.
                 Map<String, String> values = new LinkedHashMap<>(shown.session.values);
                 for (String var : d.vars.keySet()) variables().get(player, var).ifPresent(v -> values.putIfAbsent(var, v));
-                Session session = shown.session.with(values, shown.session.untrusted);
+                // A row of a list somebody typed is their words still: named
+                // untrusted for this click, so a command takes it only as a name,
+                // it is escaped where it is printed, and a value [set] or [open]
+                // builds from it stays untrusted in turn.
+                Set<String> untrusted = new HashSet<>(shown.session.untrusted);
+                untrusted.addAll(shown.rows.typed());
+                Session session = shown.session.with(values, untrusted);
                 ClickCtx ctx = new ClickCtx(engine, player, d.def, session, "act_" + n, Map.of(), null, null);
                 // A name the picture printed is the same name in the command: the
                 // row as it was shown, RP Engine's built-ins, PlaceholderAPI.
-                ctx.alsoFrom(pictureAnswers(player, shown.rows));
+                ctx.alsoFrom(pictureAnswers(player, shown.rows.values()));
                 // A page that waits, or is seamless, is answered when its actions
                 // end (ClickCtx.finish): by the next dialog, or by a close.
                 ctx.answering(d.answering(shown.page));

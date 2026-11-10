@@ -1,0 +1,224 @@
+{
+  "about": "A list's rows as Studio draws them from the document in dialog.yml: each row is a copy of the list's one template with its placeholders spelled for the row. \"commands\" are the single commands the drawing's clicks run, \"keyed\" the ones run by key (rp click, rp run), by Studio's key. Dialog Engine's DrawnListRowsTest holds DrawnFiles to them, and Studio's verify:dialogs checks they are what Studio still draws.",
+  "cases": [
+    {
+      "name": "a list the server fills",
+      "document": {
+        "column": [
+          {
+            "button": "Spawn",
+            "onClick": {
+              "action": "run_command",
+              "value": "spawn"
+            }
+          },
+          {
+            "list": "player_list",
+            "rows": 2,
+            "column": [
+              {
+                "row": [
+                  {
+                    "text": "{player_list}"
+                  },
+                  {
+                    "button": "Invite",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "/party invite {player_list}"
+                    }
+                  },
+                  {
+                    "button": "Kick",
+                    "onClick": {
+                      "action": "console_command",
+                      "value": "party kick {player_list}"
+                    }
+                  },
+                  {
+                    "button": "Both",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "party invite {player_list}\n\n/party note {player_list_note?a:Yes|b:No} {player}"
+                    }
+                  },
+                  {
+                    "button": "Act",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "[console] party warn {player_list}; [message] Warned {player_list}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "commands": [
+        "spawn",
+        "party invite {player_list_1}",
+        "[console] party warn {player_list_1}; [message] Warned {player_list_1}",
+        "party invite {player_list_2}",
+        "[console] party warn {player_list_2}; [message] Warned {player_list_2}"
+      ],
+      "keyed": {
+        "9d1456f7": "party kick {player_list_1}",
+        "d433df06": "party invite {player_list_1}\nparty note {player_list_1_note?a:Yes|b:No} {player}",
+        "9d1ca5bc": "party kick {player_list_2}",
+        "d4678400": "party invite {player_list_2}\nparty note {player_list_2_note?a:Yes|b:No} {player}"
+      }
+    },
+    {
+      "name": "a list counted by a placeholder",
+      "document": {
+        "column": [
+          {
+            "list": "home",
+            "count": "{player_homes}",
+            "rows": 3,
+            "column": [
+              {
+                "row": [
+                  {
+                    "button": "Home {home}",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "/home {home}"
+                    }
+                  },
+                  {
+                    "button": "Set",
+                    "onClick": {
+                      "action": "console_command",
+                      "value": "sethome {player} {home} {home_name}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "commands": [
+        "home 1",
+        "home 2",
+        "home 3"
+      ],
+      "keyed": {
+        "4660aed3": "sethome {player} 1 {home_1_name}",
+        "8f914897": "sethome {player} 2 {home_2_name}",
+        "4eefa783": "sethome {player} 3 {home_3_name}"
+      }
+    },
+    {
+      "name": "a list counted by a number, with a choice on the row",
+      "document": {
+        "column": [
+          {
+            "list": "tier",
+            "count": 3,
+            "rows": 2,
+            "column": [
+              {
+                "row": [
+                  {
+                    "button": "{tier?1:Bronze|2:Silver|*:Gold}",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "rank {tier?1:bronze|2:silver|*:gold} {tier}\nsay {tier_label?x:X|y:Y}"
+                    }
+                  },
+                  {
+                    "button": "Buy",
+                    "onClick": {
+                      "action": "run_command",
+                      "value": "{tier?1:/first|*:other} {tier}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "commands": [
+        "first 1",
+        "other 2",
+        "other 3"
+      ],
+      "keyed": {
+        "fd085867": "rank bronze 1\nsay {tier_1_label?x:X|y:Y}",
+        "e0e0add4": "rank silver 2\nsay {tier_2_label?x:X|y:Y}",
+        "f9c0ede1": "rank gold 3\nsay {tier_3_label?x:X|y:Y}"
+      }
+    },
+    {
+      "name": "a list with no rows written",
+      "document": {
+        "column": [
+          {
+            "list": "warps",
+            "column": [
+              {
+                "button": "{warps}",
+                "onClick": {
+                  "action": "run_command",
+                  "value": "warp {warps}"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "commands": [
+        "warp {warps_1}",
+        "warp {warps_2}",
+        "warp {warps_3}",
+        "warp {warps_4}",
+        "warp {warps_5}"
+      ],
+      "keyed": {}
+    },
+    {
+      "name": "a list in a list",
+      "document": {
+        "column": [
+          {
+            "list": "team",
+            "rows": 2,
+            "column": [
+              {
+                "column": [
+                  {
+                    "text": "{team}"
+                  },
+                  {
+                    "list": "member",
+                    "rows": 2,
+                    "row": [
+                      {
+                        "button": "{member}",
+                        "onClick": {
+                          "action": "console_command",
+                          "value": "team kick {team} {member}"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "commands": [],
+      "keyed": {
+        "faa4f35d": "team kick {team_1} {member_1}",
+        "faa2b4c6": "team kick {team_1} {member_2}",
+        "684baff0": "team kick {team_2} {member_1}",
+        "6843612b": "team kick {team_2} {member_2}"
+      }
+    }
+  ]
+}
