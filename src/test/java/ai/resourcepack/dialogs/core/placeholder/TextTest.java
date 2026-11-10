@@ -101,6 +101,22 @@ class TextTest {
                 "and without it, as before");
     }
 
+    /**
+     * A row of a list somebody typed ({@code warps=Spawn,@a} when opening) is
+     * answered from what the drawing kept, like any row, but it is still their
+     * words: the click names it untrusted, so a command takes it only as a name.
+     */
+    @Test
+    void aRowOfATypedListIsStillWhatAPlayerTyped() {
+        Map<String, String> rows = Map.of("warps_1", "Spawn", "warps_2", "@a", "warps_3", "<red>Hub");
+        Scope scope = new Scope(null, null, "test:dialog", Map.of(), rows.keySet(), null, null).withMore(rows::get);
+        assertEquals("warp Spawn", Text.fill("warp {warps_1}", scope, Text.Mode.COMMAND));
+        Text.Unsafe e = assertThrows(Text.Unsafe.class, () -> Text.fill("warp {warps_2}", scope, Text.Mode.COMMAND));
+        assertEquals("warps_2", e.key);
+        assertEquals("warp @a", Text.fill("warp {warps_2|raw}", scope, Text.Mode.COMMAND), "unless the author says it is safe there");
+        assertEquals("Going to \\<red>Hub", Text.fill("Going to {warps_3}", scope, Text.Mode.TEXT), "and it is escaped where it is printed");
+    }
+
     @Test
     void safeIsANameANumberOrAnId() {
         assertTrue(Text.safe("Notch"));

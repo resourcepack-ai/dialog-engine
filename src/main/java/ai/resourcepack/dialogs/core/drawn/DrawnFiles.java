@@ -23,13 +23,17 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -203,25 +207,18 @@ public final class DrawnFiles {
 
     /**
      * Every string in the document, as a command: what a drawing of it may run.
-     * A list's rows are copies of its template with {@code {name}} numbered
-     * {@code {name_3}} (and {@code {name_field}} as {@code {name_3_field}}), so a
-     * command in a list is allowed once per row it is drawn in.
+     * A list is its one template drawn once per row, each row spelled its own
+     * way ({@link #rowCopies}), so a command in a list is allowed once per row
+     * it is drawn in.
      */
     public static Set<String> commands(Map<String, Object> spec) {
         Set<String> out = new HashSet<>();
         if (spec == null) return out;
-        collect(spec, out);
-        Map<String, Integer> lists = new LinkedHashMap<>();
-        lists(spec, lists);
-        for (Map.Entry<String, Integer> list : lists.entrySet()) {
-            Pattern p = Pattern.compile("\\{" + Pattern.quote(list.getKey()) + "((?:_[A-Za-z0-9_]*)?)(\\?[^{}]*)?\\}");
-            for (String c : List.copyOf(out)) {
-                if (!p.matcher(c).find()) continue;
-                for (int k = 1; k <= list.getValue(); k++) {
-                    String row = "{" + list.getKey() + "_" + k;
-                    out.add(p.matcher(c).replaceAll(m -> java.util.regex.Matcher.quoteReplacement(row + m.group(1) + (m.group(2) == null ? "" : m.group(2)) + "}")));
-                }
-            }
+        Set<String> written = new LinkedHashSet<>();
+        collect(spec, written);
+        for (String text : withRows(written, lists(spec))) {
+            String c = commandText(text);
+            if (!c.isEmpty()) out.add(c);
         }
         return out;
     }
@@ -232,30 +229,49 @@ public final class DrawnFiles {
      * {@code console_command}, its command as {@link #commandText} spells it.
      * One built from what the player typed ({@code $(name)}) is left out, as
      * Studio leaves it out. Read from dialog.yml, never from Studio's answer.
+     *
+     * <p>A "Run command" with several commands is kept by key the same way
+     * (Studio's {@code rp run <key>}); one is the game's own run_command.
+     *
+     * <p>A key is a hash of the commands as the click runs them, and a list's
+     * row runs its own copy ({@link #rowCopies}), so a click in a list has a key
+     * per row. Before 0.7.1 only the template's was kept, and every "Run as
+     * console" button and every button with several commands on a list row did
+     * nothing ("a click runs rp click ..., which its dialog.yml does not have").
      */
     public static Map<String, String> consoleCommands(Map<String, Object> spec) {
         Map<String, String> out = new LinkedHashMap<>();
-        consoles(spec, out);
+        List<Click> clicks = new ArrayList<>();
+        clicks(spec, clicks);
+        if (clicks.isEmpty()) return out;
+        Map<String, ListRows> lists = lists(spec);
+        for (Click click : clicks) {
+            for (String value : withRows(List.of(click.value()), lists)) keyed(click.console(), value, out);
+        }
         return out;
     }
 
-    private static void consoles(Object value, Map<String, String> out) {
+    /** What a piece or button runs when clicked, as written: as the console, or as the player. */
+    private record Click(boolean console, String value) {}
+
+    private static void clicks(Object value, List<Click> out) {
         if (value instanceof Map<?, ?> map) {
-            // A "Run command" with several commands is kept by key the same way
-            // (Studio's `rp run <key>`); one is the game's own run_command.
             boolean console = "console_command".equals(map.get("action"));
             boolean run = "run_command".equals(map.get("action"));
-            if ((console || run) && map.get("value") instanceof String raw && !TYPED.matcher(raw).find()) {
-                List<String> lines = commandLines(raw);
-                if (!lines.isEmpty() && (console || lines.size() > 1)) {
-                    String commands = String.join("\n", lines);
-                    out.put(consoleKey(commands), commands);
-                }
-            }
-            for (Object v : map.values()) consoles(v, out);
+            if ((console || run) && map.get("value") instanceof String raw) out.add(new Click(console, raw));
+            for (Object v : map.values()) clicks(v, out);
         } else if (value instanceof List<?> list) {
-            for (Object v : list) consoles(v, out);
+            for (Object v : list) clicks(v, out);
         }
+    }
+
+    /** A click's commands under their key, when Studio sends it by key: the console's, or more than one. */
+    private static void keyed(boolean console, String value, Map<String, String> out) {
+        if (TYPED.matcher(value).find()) return;
+        List<String> lines = commandLines(value);
+        if (lines.isEmpty() || (!console && lines.size() < 2)) return;
+        String commands = String.join("\n", lines);
+        out.put(consoleKey(commands), commands);
     }
 
     /** The most commands one click runs: Studio's {@code DIALOG_MAX_CLICK_COMMANDS}. */
@@ -290,11 +306,38 @@ public final class DrawnFiles {
         return String.format("%08x", hash);
     }
 
-    /** Every list in the document, by name, with how many rows it draws. */
-    private static void lists(Object value, Map<String, Integer> out) {
+    // ------------------------------------------------------------------ lists
+
+    /**
+     * How many rows Studio draws a list as, each way a list can be: one the
+     * server fills, whose row 3 says {@code {warps_3}}, and one that counts
+     * ("Repeated a number of times", a {@code count:}), whose row 3 says
+     * {@code 3}. Zero for a way the document does not use the name.
+     */
+    private record ListRows(int filled, int counted) {}
+
+    /** More rows than Studio draws any list with (its FLEX_LIST_MAX_ROWS is 12), so a raised cap there needs nothing here. */
+    private static final int MAX_ROWS = 64;
+    /** A list with no {@code rows:} written: Studio draws 5, and may draw up to its cap. */
+    private static final int UNWRITTEN_ROWS = 12;
+    /** A count that is a value's name, as Studio's {@code listCountOf} reads one: {@code {homes}}, {@code %homes%}, {@code homes}. */
+    private static final Pattern COUNT_NAME = Pattern.compile("\\{[A-Za-z0-9_]{1,48}}|%[A-Za-z0-9_]{1,48}%|[A-Za-z_][A-Za-z0-9_]{0,47}");
+
+    /** Every list in the document, by name, in the order Studio numbers them: a list before the lists inside it. */
+    private static Map<String, ListRows> lists(Object spec) {
+        Map<String, ListRows> out = new LinkedHashMap<>();
+        lists(spec, out);
+        return out;
+    }
+
+    private static void lists(Object value, Map<String, ListRows> out) {
         if (value instanceof Map<?, ?> map) {
-            if (map.get("list") instanceof String name && name.matches("[A-Za-z0-9_]+") && map.get("rows") instanceof Number rows) {
-                out.merge(name, Math.min(64, Math.max(0, rows.intValue())), Math::max);
+            if (map.get("list") instanceof String name && name.matches("[A-Za-z0-9_]+")) {
+                int rows = map.get("rows") instanceof Number n ? Math.min(MAX_ROWS, Math.max(1, n.intValue())) : UNWRITTEN_ROWS;
+                int count = counted(map.get("count"));
+                // A count that is a number draws that many rows, whatever rows: says.
+                ListRows drawn = count < 0 ? new ListRows(rows, 0) : new ListRows(0, Math.max(rows, count));
+                out.merge(name, drawn, (a, b) -> new ListRows(Math.max(a.filled(), b.filled()), Math.max(a.counted(), b.counted())));
             }
             for (Object v : map.values()) lists(v, out);
         } else if (value instanceof List<?> list) {
@@ -302,10 +345,80 @@ public final class DrawnFiles {
         }
     }
 
+    /**
+     * How many rows a list's {@code count:} asks for by itself: -1 when it is
+     * not a count (a list the server fills), 0 for a value's name (as many as
+     * there is room for). Studio's {@code listCountOf}.
+     */
+    private static int counted(Object count) {
+        if (count instanceof Number n) {
+            double d = n.doubleValue();
+            return Double.isNaN(d) || Double.isInfinite(d) ? -1 : (int) Math.max(0, Math.min(MAX_ROWS, Math.round(d)));
+        }
+        if (!(count instanceof String s)) return -1;
+        String t = s.strip();
+        if (t.matches("\\d{1,3}")) return Math.min(MAX_ROWS, Integer.parseInt(t));
+        return COUNT_NAME.matcher(t).matches() ? 0 : -1;
+    }
+
+    /** A placeholder of list {@code name} in any words: {@code {name}}, {@code {name_field}}, a choice on either. Studio's {@code listPlaceholder}. */
+    private static Pattern placeholder(String name) {
+        return Pattern.compile("\\{" + Pattern.quote(name) + "((?:_[A-Za-z0-9_]*)?)(\\?[^{}]*)?\\}");
+    }
+
+    /** Each text, and its copy for every row of every list it is in (in a list in a list, for every pair of rows). */
+    private static Set<String> withRows(Collection<String> written, Map<String, ListRows> lists) {
+        Set<String> out = new LinkedHashSet<>(written);
+        for (Map.Entry<String, ListRows> list : lists.entrySet()) {
+            Pattern placeholder = placeholder(list.getKey());
+            for (String text : List.copyOf(out)) {
+                if (placeholder.matcher(text).find()) out.addAll(rowCopies(text, placeholder, list.getKey(), list.getValue()));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A text's copy for each row of a list, spelled as Studio spells a row.
+     *
+     * <ul>
+     *   <li>A list the server fills (Studio's {@code listRowOf}): {@code {name}}
+     *   is {@code {name_3}}, {@code {name_field}} is {@code {name_3_field}}, a
+     *   choice on either kept as written.</li>
+     *   <li>A list that counts (Studio's {@code listCountRowOf}): {@code {name}}
+     *   is the row's own number, {@code 3}; a choice on it is decided for that
+     *   number as the drawing is made; and {@code {name_field}} is still
+     *   {@code {name_3_field}}, a value of the row's own. Before 0.7.1 such a
+     *   row was spelled the first way, so a counting list whose button ran a
+     *   command with its number could not be sent to the server at all ("the
+     *   drawing runs a command dialog.yml does not have").</li>
+     * </ul>
+     */
+    private static List<String> rowCopies(String text, Pattern placeholder, String name, ListRows rows) {
+        List<String> out = new ArrayList<>(rows.filled() + rows.counted());
+        for (int k = 1; k <= rows.filled(); k++) {
+            String row = "{" + name + "_" + k;
+            out.add(placeholder.matcher(text).replaceAll(m ->
+                    Matcher.quoteReplacement(row + m.group(1) + (m.group(2) == null ? "" : m.group(2)) + "}")));
+        }
+        for (int k = 1; k <= rows.counted(); k++) {
+            String row = "{" + name + "_" + k;
+            String number = String.valueOf(k);
+            out.add(placeholder.matcher(text).replaceAll(m -> {
+                String choice = m.group(2);
+                if (!m.group(1).isEmpty()) return Matcher.quoteReplacement(row + m.group(1) + (choice == null ? "" : choice) + "}");
+                if (choice == null) return number;
+                // Decided by the rule the picture's own choices are (RP Engine's, which Studio's chooseEntry mirrors).
+                return Matcher.quoteReplacement(DialogPlaceholders.choose(choice.substring(1), Optional.of(number)).orElse(""));
+            }));
+        }
+        return out;
+    }
+
+    /** Every string in the document, as written. */
     private static void collect(Object value, Set<String> out) {
         if (value instanceof String s) {
-            String c = commandText(s);
-            if (!c.isEmpty()) out.add(c);
+            if (!s.isBlank()) out.add(s);
         } else if (value instanceof Map<?, ?> map) {
             for (Object v : map.values()) collect(v, out);
         } else if (value instanceof List<?> list) {

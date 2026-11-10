@@ -152,10 +152,23 @@ public final class ClickCtx implements ClickContext {
      * value that could do something (a tag, a line break) not as
      * {@link Engine#escape} left it. Holding a harmless one changes nothing
      * either way, and an escaped one is the plugin doing it right.
+     *
+     * <p>A typed list's row is a typed value the session does not hold: a drawn
+     * dialog keeps it on the drawing and answers it through {@link #alsoFrom}.
+     * It is asked there too, or {@code ctx.set("to", ctx.resolve("{warps_2}"))}
+     * would make a player's words the dialog's own.
      */
     boolean carriesUntrusted(String value) {
-        for (String key : session.untrusted) {
+        return carries(value, session.untrusted, key -> {
             String typed = session.values.get(key);
+            return typed != null || more == null ? typed : more.apply(key);
+        });
+    }
+
+    /** {@link #carriesUntrusted}, over the typed keys and what each holds ({@code typedOf}, null for nothing). */
+    static boolean carries(String value, Set<String> untrusted, Function<String, String> typedOf) {
+        for (String key : untrusted) {
+            String typed = typedOf.apply(key);
             if (typed == null || typed.isEmpty()) continue;
             if (value.equals(typed)) return true;
             if (!value.contains(typed)) continue;

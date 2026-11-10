@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -70,10 +71,32 @@ class DrawnRowsTest {
     }
 
     @Test
-    void aListAPlayerTypedIsNotARowsAnswer() {
+    void aListAPlayerTypedIsTheirWordsInEveryRow() {
         assertTrue(DrawnDialogs.fromTyped("warps_3", Set.of("warps")), "warps=a,b from /de open is typed, and so is its third item");
         assertTrue(DrawnDialogs.fromTyped("Warps_3_note", Set.of("warps")));
         assertFalse(DrawnDialogs.fromTyped("warps_3", Set.of("target")), "another typed value says nothing about this list");
         assertFalse(DrawnDialogs.fromTyped("target", Set.of("target")), "not a row at all");
+    }
+
+    /**
+     * {@code /de open server:warps warps=Spawn,@a}, the way the docs fill a list.
+     * The rows printed Spawn and @a, and a row's button ran {@code warp {warps_1}}
+     * as written. The drawing keeps those rows too, named as a player's words,
+     * so the click's command gets Spawn and is refused @a.
+     */
+    @Test
+    void aRowOfATypedListIsKeptAndNamedAsTyped() {
+        Function<String, Optional<String>> shown = name -> switch (name) {
+            case "warps_1" -> Optional.of("Spawn");
+            case "warps_2" -> Optional.of("@a");
+            case "warps_3" -> Optional.of("");
+            case "plist_1" -> Optional.of("Alex");
+            default -> Optional.empty();
+        };
+        DrawnDialogs.Rows rows = DrawnDialogs.rowValues(Set.of("warps_1", "warps_2", "warps_3", "plist_1", "gone_1"), Set.of("warps"), shown);
+        assertEquals(Map.of("warps_1", "Spawn", "warps_2", "@a", "plist_1", "Alex"), rows.values(),
+                "a row past the end of its list, and one nothing answers, has no click to answer");
+        assertEquals(Set.of("warps_1", "warps_2"), rows.typed(), "the list that was typed, and not the one a plugin filled");
+        assertEquals(DrawnDialogs.Rows.NONE, DrawnDialogs.rowValues(Set.of(), Set.of("warps"), shown));
     }
 }
