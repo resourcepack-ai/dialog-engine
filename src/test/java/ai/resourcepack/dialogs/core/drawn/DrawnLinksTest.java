@@ -56,6 +56,29 @@ class DrawnLinksTest {
         assertTrue(json.contains("\"dialog\":\"studio:has space\""), "not an id, so not an action's argument");
     }
 
+    /**
+     * "Open another dialog" carries an id and nothing else, because the game's
+     * show_dialog has nowhere to put a value. A Run command written as
+     * {@code [open] <id> key=value} is the way to open one WITH values: it is
+     * Dialog Engine's own [open] action, so the dialog is replaced in place
+     * (no close in between, as {@code /de open} has) and keeps [back].
+     */
+    @Test
+    void aRunCommandOfOpenWithValuesIsTheOpenAction() {
+        String written = "[open] studio:shop item=diamond count={amount}";
+        java.util.Map<String, Object> spec = java.util.Map.of("buttons",
+                List.of(java.util.Map.of("action", "run_command", "value", written)));
+        JsonElement json = JsonParser.parseString(
+                "{\"type\":\"minecraft:notice\",\"title\":\"Shop\",\"action\":{\"label\":\"Buy\",\"action\":"
+                        + "{\"type\":\"minecraft:run_command\",\"command\":\"" + written + "\"}}}");
+        List<List<String>> actions = new ArrayList<>();
+        List<String> refused = new ArrayList<>();
+        DrawnDialogs.rewrite(json, actions, DrawnFiles.commands(spec), refused, link -> link.startsWith("studio:"));
+        assertTrue(refused.isEmpty(), "the document has it, so it may run: " + refused);
+        assertEquals(List.of(List.of(written)), actions, "one [open] action, values and all, not a command the player runs");
+        assertTrue(json.toString().contains("\"command\":\"dialogclick act 0\""), json.toString());
+    }
+
     @Test
     void theOldRewriteOpensNothingItself() {
         JsonElement json = JsonParser.parseString(PAGE);
