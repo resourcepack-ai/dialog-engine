@@ -172,7 +172,13 @@ public final class DrawnDialogs {
 
     private final Engine engine;
     private DialogVariables variables;
-    private final Map<String, Drawn> dialogs = new LinkedHashMap<>();
+    /**
+     * Every drawn dialog by id. Replaced whole by {@link #load}, never changed in
+     * place: on Folia a reload runs on the global region while clicks and opens
+     * read this from players' regions, and a map being cleared and refilled
+     * under them could answer "no such dialog" halfway through.
+     */
+    private volatile Map<String, Drawn> dialogs = Map.of();
     private final Map<UUID, Shown> lastShown = new ConcurrentHashMap<>();
     /** Each player's own copies on the Quick Actions key, by drawn dialog: what {@link #adopt} reads their clicks against. */
     private final Map<UUID, Map<String, Copy>> quickCopies = new ConcurrentHashMap<>();
@@ -212,7 +218,9 @@ public final class DrawnDialogs {
      */
     private DialogSlots slots;
 
-    private DialogSlots slots() {
+    private synchronized DialogSlots slots() {
+        // Synchronized: two regions asking at once must share one, or each
+        // keeps its own idea of what a player has picked up.
         if (slots == null) slots = new DialogSlots(engine.plugin());
         return slots;
     }
@@ -225,7 +233,7 @@ public final class DrawnDialogs {
     }
 
     /** Players' settings, kept on the player; made on first use, once the engine has its plugin. */
-    private DialogVariables variables() {
+    private synchronized DialogVariables variables() {
         if (variables == null) variables = new DialogVariables(engine.plugin());
         return variables;
     }
@@ -242,7 +250,7 @@ public final class DrawnDialogs {
     // ------------------------------------------------------------------ loading
 
     public void load() {
-        dialogs.clear();
+        Map<String, Drawn> next = new LinkedHashMap<>();
         problems.clear();
         stale.clear();
         Map<String, Map<Integer, Integer>> moves = DrawnGlyphs.moves(folder());
@@ -264,13 +272,14 @@ public final class DrawnDialogs {
                         // before this, so only an edited one is still here to redraw.
                         else if (!DrawnInstall.shipped(ns.toPath()) && DrawnFiles.inDefaultFont(dir.toPath())) stale.put(id, dir);
                         Drawn d = read(id, dir, moves.get(ns.getName() + "/" + dir.getName()));
-                        if (d != null) dialogs.put(id, d);
+                        if (d != null) next.put(id, d);
                     } catch (Exception e) {
                         problems.add("drawn/" + ns.getName() + "/" + dir.getName() + ": " + e.getMessage());
                     }
                 }
             }
         }
+        dialogs = java.util.Collections.unmodifiableMap(next);
         unknownOpens();
         registerCommands();
     }
