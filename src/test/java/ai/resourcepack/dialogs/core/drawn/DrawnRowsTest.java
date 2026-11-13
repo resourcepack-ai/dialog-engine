@@ -99,4 +99,23 @@ class DrawnRowsTest {
         assertEquals(Set.of("warps_1", "warps_2"), rows.typed(), "the list that was typed, and not the one a plugin filled");
         assertEquals(DrawnDialogs.Rows.NONE, DrawnDialogs.rowValues(Set.of(), Set.of("warps"), shown));
     }
+
+    /**
+     * A scrolled list: row 3 of a list started at item 11 shows item 13, and a
+     * click on it must act on item 13. The rows' values are read through the
+     * lookup the sorted box hands back, as the picture is.
+     */
+    @Test
+    void aScrolledRowsClickActsOnTheItemItShows() {
+        Map<String, String> values = new java.util.HashMap<>();
+        for (int i = 1; i <= 20; i++) values.put("warps_" + i, "Warp " + i);
+        values.put("from", "11");
+        Function<String, Optional<String>> lookup = name -> Optional.ofNullable(values.get(name));
+        com.google.gson.JsonObject carrier = new com.google.gson.JsonObject();
+        carrier.addProperty("text", "");
+        carrier.addProperty("insertion", DialogSorts.SORT + "{\"list\":\"warps\",\"start\":\"{from}\"}");
+        DialogSorts.Sorted sorted = DialogSorts.apply(carrier.toString(), lookup, p -> false);
+        DrawnDialogs.Rows rows = DrawnDialogs.rowValues(Set.of("warps_3"), Set.of(), sorted.over(lookup));
+        assertEquals("Warp 13", rows.values().get("warps_3"));
+    }
 }

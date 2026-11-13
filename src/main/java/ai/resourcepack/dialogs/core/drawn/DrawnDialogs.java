@@ -686,8 +686,11 @@ public final class DrawnDialogs {
         // One set of answers for the picture and for what its rows' clicks will
         // act on: each name is asked once, so the two cannot disagree.
         Function<String, Optional<String>> lookup = once(lookup(player, d, session.values));
-        json = filled(player, json, lookup);
-        Rows rows = rowValues(d.rowNames.getOrDefault(page, Set.of()), session.untrusted, lookup);
+        Filled drawn = filled(player, json, lookup);
+        json = drawn.json();
+        // The rows' values from the lookup that drew the picture: on a scrolled
+        // list, row 3's click acts on the item row 3 shows, not item 3.
+        Rows rows = rowValues(d.rowNames.getOrDefault(page, Set.of()), session.untrusted, drawn.lookup());
         json = DialogBars.fill(json);
         // The player's own items into the live slots, after the placeholders and
         // bars, as RP Engine does: a slot reached by a page turn or a move keeps
@@ -728,10 +731,11 @@ public final class DrawnDialogs {
         Session session = new Session(standIn.getUniqueId(), d.id, Map.of(), Set.of(), null);
         String json = ACT_CLICK.matcher(source).replaceAll("$1 " + nonce + "\"");
         Function<String, Optional<String>> lookup = once(lookup(standIn, d, session.values));
-        json = DialogBars.fill(filled(standIn, json, lookup));
+        Filled drawn = filled(standIn, json, lookup);
+        json = DialogBars.fill(drawn.json());
         quickCopies.computeIfAbsent(standIn.getUniqueId(), k -> new ConcurrentHashMap<>())
                 .put(d.id, new Copy(d.first, source, session, nonce, json,
-                        rowValues(d.rowNames.getOrDefault(d.first, Set.of()), session.untrusted, lookup)));
+                        rowValues(d.rowNames.getOrDefault(d.first, Set.of()), session.untrusted, drawn.lookup())));
         return json;
     }
 
@@ -769,20 +773,26 @@ public final class DrawnDialogs {
      * ("show when") are emptied, so nothing in one is looked up and no marker
      * in one is left for the passes after this.
      */
-    private String filled(Player player, String json, Function<String, Optional<String>> lookup) {
-        boolean conditions = DialogConditions.any(json);
-        boolean rows = DialogRows.any(json);
-        if (!conditions && !rows && !DialogPlaceholders.any(json)) return json;
+    private Filled filled(Player player, String json, Function<String, Optional<String>> lookup) {
         // A sorted box's order for this player first: it answers the
-        // placeholders its slots' conditions test, as in RP Engine.
+        // placeholders its slots' conditions test, as in RP Engine. It also
+        // scrolls a list, moving {warps_3} on to the item row 3 now shows, so
+        // the lookup it gives back is the one the rows' clicks must act on too.
         if (DialogSorts.any(json)) {
             DialogSorts.Sorted sorted = DialogSorts.apply(json, lookup, player::hasPermission);
             json = sorted.json();
             lookup = sorted.over(lookup);
         }
+        boolean conditions = DialogConditions.any(json);
+        boolean rows = DialogRows.any(json);
+        if (!conditions && !rows && !DialogPlaceholders.any(json)) return new Filled(json, lookup);
         String out = conditions ? DialogConditions.strip(json, lookup, player::hasPermission) : json;
         out = DialogPlaceholders.any(out) ? DialogPlaceholders.fill(out, lookup) : out;
-        return rows ? DialogRows.strip(out, lookup) : out;
+        return new Filled(rows ? DialogRows.strip(out, lookup) : out, lookup);
+    }
+
+    /** A page's JSON for one player, and the lookup that drew it: the sorted, scrolled one when it has a sorted box. */
+    private record Filled(String json, Function<String, Optional<String>> lookup) {
     }
 
     /** {@code lookup}, each name asked once: its answer is kept for as long as this drawing is being made. */
