@@ -453,20 +453,20 @@ wait in Studio is answered the same way.
 
 ## Building
 
-JDK 21. Dialog Engine compiles part of [RP Engine](https://github.com/resourcepack-ai/rp-engine)
-in (the code that runs drawn dialogs), so clone it beside this repository:
+JDK 21.
 
 ```bash
-git clone https://github.com/resourcepack-ai/rp-engine
 git clone https://github.com/resourcepack-ai/dialog-engine
 cd dialog-engine
 ./gradlew build
 ```
 
-The plugin is `build/libs/dialog-engine-<version>.jar`. Other dependencies
-come from Maven Central, SpigotMC's repository and
-[repo.resourcepack.ai](https://repo.resourcepack.ai) (`ai.resourcepack:common`,
-a small shared library for the update check and usage count).
+The plugin is `build/libs/dialog-engine-<version>.jar`. Dependencies come from
+Maven Central, SpigotMC's repository and
+[repo.resourcepack.ai](https://repo.resourcepack.ai): `ai.resourcepack:common`,
+a small shared library for the update check and usage count, and
+`ai.resourcepack:dialog-runtime`, the code that runs drawn dialogs, which RP
+Engine shades too.
 
 ## Support
 

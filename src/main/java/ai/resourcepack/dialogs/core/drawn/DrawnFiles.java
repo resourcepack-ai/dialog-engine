@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogPlaceholders;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.edit.EditWire;
 import com.google.gson.Gson;

@@ -40,6 +40,12 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        // The drawn-dialog runtime (ai.resourcepack:dialog-runtime) logs as this
+        // plugin. Dialog Engine runs on 1.21.7+, where the attribute has its
+        // 1.21.3 name and a live head needs only 1.21.9 (Heads).
+        ai.resourcepack.dialogruntime.DialogHost.configure(getLogger(), "",
+                ai.resourcepack.dialogs.core.drawn.DrawnRuntime::headsSupported,
+                () -> org.bukkit.attribute.Attribute.MAX_HEALTH);
         engine = new Engine(this);
         String clicks = engine.listenForClicks();
         if (clicks == null) {
