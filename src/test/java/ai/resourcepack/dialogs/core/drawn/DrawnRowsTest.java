@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogSorts;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;

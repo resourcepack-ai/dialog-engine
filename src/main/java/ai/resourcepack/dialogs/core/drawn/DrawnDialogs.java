@@ -1,5 +1,14 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogBars;
+import ai.resourcepack.dialogruntime.DialogConditions;
+import ai.resourcepack.dialogruntime.DialogItems;
+import ai.resourcepack.dialogruntime.DialogPlaceholders;
+import ai.resourcepack.dialogruntime.DialogRows;
+import ai.resourcepack.dialogruntime.DialogSlots;
+import ai.resourcepack.dialogruntime.DialogSorts;
+import ai.resourcepack.dialogruntime.DialogVariables;
+import ai.resourcepack.dialogruntime.Placeholders;
 import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.quick.StandIn;
 import ai.resourcepack.dialogs.core.Engine;
@@ -216,20 +225,19 @@ public final class DrawnDialogs {
      * Engine's own code, compiled in (DialogSlots, DialogItems). Made on first
      * use, once the engine has its plugin.
      */
-    private DialogSlots slots;
+    private DialogSlots<String> slots;
 
-    private synchronized DialogSlots slots() {
+    private synchronized DialogSlots<String> slots() {
         // Synchronized: two regions asking at once must share one, or each
         // keeps its own idea of what a player has picked up.
-        if (slots == null) slots = new DialogSlots(engine.plugin());
+        if (slots == null) slots = new DialogSlots<>(engine.plugin());
         return slots;
     }
 
     /** A drawn dialog's id as RP Engine's slot code keys it. */
-    private static ContentId contentId(String id) {
-        return ContentId.parse(id.toLowerCase(Locale.ROOT))
-                .or(() -> ContentId.parse("drawn:" + id.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_./-]", "_")))
-                .orElseThrow();
+    /** The key a drawing's slots are kept under in the runtime: its id, as RP Engine's ContentId would read it. */
+    private static String slotKey(String id) {
+        return id.toLowerCase(Locale.ROOT);
     }
 
     /** Players' settings, kept on the player; made on first use, once the engine has its plugin. */
@@ -742,7 +750,7 @@ public final class DrawnDialogs {
         // bars, as RP Engine does: a slot reached by a page turn or a move keeps
         // what was picked up.
         if (DialogItems.perPlayer(json)) {
-            ContentId cid = contentId(d.id);
+            String cid = slotKey(d.id);
             slots().shown(player, cid, before != null && before.drawn.equals(d.id));
             json = DialogItems.fill(json, slots().reader(player), slots().held(player, cid).orElse(null), d.itemIcons);
         }
@@ -1016,7 +1024,7 @@ public final class DrawnDialogs {
             Optional<DialogSlots.Key> key = DialogSlots.Key.parse(args[1]);
             if (key.isEmpty()) return;
             Tasks.on(engine.plugin(), player, () -> {
-                slots().click(player, contentId(d.id), key.get());
+                slots().click(player, slotKey(d.id), key.get());
                 showPage(player, d, shown.page, shown.session);
             });
         } else if (act) {

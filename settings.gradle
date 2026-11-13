@@ -5,3 +5,9 @@ rootProject.name = 'dialog-engine'
 if (file('../plugin-common').isDirectory()) {
     includeBuild('../plugin-common')
 }
+
+// ai.resourcepack:dialog-runtime, the drawn-dialog runtime both engines shade.
+// From source beside this directory, else from repo.resourcepack.ai.
+if (file('../dialog-runtime').isDirectory()) {
+    includeBuild('../dialog-runtime')
+}

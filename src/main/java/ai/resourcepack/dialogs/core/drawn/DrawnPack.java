@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogShaderRevision;
 import ai.resourcepack.common.host.PackUploader;
 import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.shader.ShaderClashes;

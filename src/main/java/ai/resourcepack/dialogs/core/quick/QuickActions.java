@@ -7,7 +7,7 @@ import ai.resourcepack.common.quick.StandIn;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.Clicks;
-import ai.resourcepack.dialogs.core.drawn.DialogPackets;
+import ai.resourcepack.dialogruntime.DialogPackets;
 import ai.resourcepack.dialogs.core.placeholder.Text;
 import ai.resourcepack.dialogs.core.platform.Platform;
 import ai.resourcepack.dialogs.core.yaml.Defs;

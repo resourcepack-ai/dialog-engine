@@ -1,7 +1,7 @@
 package ai.resourcepack.dialogs.core.platform;
 
-import ai.resourcepack.dialogs.core.drawn.DialogPackets;
-import ai.resourcepack.dialogs.core.drawn.DialogSnbt;
+import ai.resourcepack.dialogruntime.DialogPackets;
+import ai.resourcepack.dialogruntime.DialogSnbt;
 import ai.resourcepack.dialogs.core.yaml.Renderer;
 import com.google.gson.JsonObject;
 import net.kyori.adventure.text.Component;
