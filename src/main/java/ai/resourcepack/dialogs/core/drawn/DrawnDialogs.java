@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogFeatures;
 import ai.resourcepack.dialogruntime.DialogBars;
 import ai.resourcepack.dialogruntime.DialogConditions;
 import ai.resourcepack.dialogruntime.DialogItems;
@@ -367,6 +368,22 @@ public final class DrawnDialogs {
         return new Defs.QuickAction(launcher, label);
     }
 
+    /**
+     * What a drawing may need that this engine does (the handshake, Studio's
+     * lib/dialogs/requires.ts): everything the dialog runtime draws, and this
+     * engine's own pages, console and run clicks, settings, closing and Quick
+     * Actions key. Not RP Engine's server icons by id ({@code rp:icon:}),
+     * which this engine leaves blank.
+     */
+    static final Set<String> FEATURES;
+
+    static {
+        Set<String> features = new HashSet<>(DialogFeatures.DRAWING);
+        features.addAll(List.of(DialogFeatures.PAGES, DialogFeatures.CONSOLE, DialogFeatures.RUN, DialogFeatures.SETTINGS,
+                DialogFeatures.CLOSE_AFTER_CLICK, DialogFeatures.QUICK_ACTION));
+        FEATURES = Set.copyOf(features);
+    }
+
     /** {@code move}: the characters this dialog's picture was moved to ({@link DrawnGlyphs}), or null. */
     private Drawn read(String id, File dir, Map<Integer, Integer> move) throws Exception {
         File built = new File(dir, "dialogs.json");
@@ -392,10 +409,17 @@ public final class DrawnDialogs {
         Map<String, Integer> itemIcons = new HashMap<>();
         String first = null;
         String ns = id.substring(0, id.indexOf(':'));
+        Set<String> lacking = new java.util.TreeSet<>();
         for (JsonElement e : list) {
             JsonObject page = e.getAsJsonObject();
             String studioId = "studio:" + page.get("id").getAsString();
             if (first == null) first = studioId;
+            // The handshake: what Studio says this page needs, against what this engine does.
+            if (page.get("requires") instanceof JsonArray requires) {
+                List<String> names = new ArrayList<>();
+                for (JsonElement name : requires) if (name.isJsonPrimitive()) names.add(name.getAsString());
+                lacking.addAll(DialogFeatures.missing(names, FEATURES));
+            }
             JsonElement json = page.get("json");
             if (json instanceof JsonObject o && o.get("after_action") instanceof JsonElement a && a.isJsonPrimitive()) {
                 // Sent as none and closed by the engine after a click nothing
@@ -430,6 +454,10 @@ public final class DrawnDialogs {
             }
         }
         if (first == null) return null;
+        if (!lacking.isEmpty()) {
+            engine.plugin().getLogger().warning("The drawn dialog " + id + " needs what this Dialog Engine cannot do ("
+                    + String.join(", ", lacking) + "). It opens without it: update Dialog Engine to show it as it was made.");
+        }
         for (String r : refused) {
             problems.add("drawn/" + id.replace(':', '/') + ": a click runs \"" + r + "\", which its " + DrawnFiles.SOURCE
                     + " does not have; that click does nothing");
