@@ -10,6 +10,8 @@ const mineflayer = require("mineflayer");
 const nbt = require("prismarine-nbt");
 
 const port = Number(process.argv[2] || 25779);
+/** Folia, or Paper running the same session ({@code --folia <paper jar>}). */
+const folia = process.argv[3] !== "paper";
 const FAR = 3000;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const consoleCmd = (line) => console.log(`CONSOLE ${line}`);
@@ -66,6 +68,16 @@ async function heard(bot, re, from, ms = 4000) {
   const until = Date.now() + ms;
   while (Date.now() < until) {
     if (bot.chatLog.slice(from).some((m) => re.test(m))) return true;
+    await wait(100);
+  }
+  return false;
+}
+
+/** Waits for the server's log to match [re] after [from] characters: what EventProbe says a plugin was told. */
+async function logged(re, from, ms = 4000) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (re.test(serverLog.slice(from))) return true;
     await wait(100);
   }
   return false;
@@ -180,6 +192,74 @@ function click(bot, token) {
   const next = await nextDialog(far, n);
   check("an [open] action shows the next dialog", !!next && JSON.stringify(next).includes("second"));
 
+  // ---- the events a plugin hears (EventProbe logs them) -----------------
+  const events = async () => {
+    const k = far.dialogs.length;
+    far.chat("/foliaevents");
+    return nextDialog(far, k);
+  };
+  let at = serverLog.length;
+  let ev = await events();
+  check("DialogCloseEvent: another dialog in its place is REPLACED, naming it",
+    await logged(/EVENT close dialog=folia:next reason=REPLACED button=null next=folia:events player=FarBot .*on=owner/, at));
+
+  at = serverLog.length;
+  c = far.chatLog.length;
+  if (ev) click(far, tokenFor(ev, "Named"));
+  check("DialogClickEvent: a button is named by its [event], placeholders filled",
+    await logged(/EVENT click dialog=folia:events button=picked_FarBot drawn=false .*on=owner/, at));
+  check("and its other actions still run", await heard(far, /named-ran/, c));
+  check("DialogCloseEvent: a seamless click nothing answers is BUTTON, with the button",
+    await logged(/EVENT close dialog=folia:events reason=BUTTON button=picked_FarBot next=null .*on=owner/, at));
+
+  at = serverLog.length;
+  ev = await events();
+  if (ev) click(far, tokenFor(ev, "Leave"));
+  check("DialogCloseEvent: the exit button, which Escape presses, is EXIT",
+    await logged(/EVENT close dialog=folia:events reason=EXIT button=exit .*on=owner/, at));
+
+  at = serverLog.length;
+  ev = await events();
+  if (ev) click(far, tokenFor(ev, "Shut"));
+  check("DialogCloseEvent: [close] is BUTTON, with the button's id:",
+    await logged(/EVENT close dialog=folia:events reason=BUTTON button=shut .*on=owner/, at));
+
+  at = serverLog.length;
+  ev = await events();
+  if (ev) click(far, tokenFor(ev, "Onward"));
+  check("DialogCloseEvent: a button's [open] is REPLACED",
+    await logged(/EVENT close dialog=folia:events reason=REPLACED button=null next=folia:next .*on=owner/, at));
+  await wait(500);
+  check("and only once", (serverLog.slice(at).match(/EVENT close dialog=folia:events /g) || []).length === 1);
+
+  // A plugin's chest takes the screen.
+  at = serverLog.length;
+  ev = await events();
+  consoleCmd("probechest FarBot");
+  check("DialogCloseEvent: a container opened over it is SCREEN",
+    await logged(/EVENT chest FarBot[\s\S]*EVENT close dialog=folia:events reason=SCREEN .*on=owner/, at, 8000));
+  far.closeWindow(far.currentWindow || { id: 1 });
+  await wait(500);
+
+  // Another world's loading screen takes it. Folia tells plugins nothing about a move to another world (no
+  // PlayerChangedWorldEvent, no PlayerTeleportEvent, from /tp or a plugin's teleportAsync), so these are Paper's.
+  if (!folia) {
+    at = serverLog.length;
+    ev = await events();
+    consoleCmd("probetp FarBot world_the_end 0 70 0");
+    check("DialogCloseEvent: a plugin's teleport to another world is SCREEN",
+      await logged(/EVENT close dialog=folia:events reason=SCREEN .*on=owner/, at, 8000));
+    consoleCmd(`probetp FarBot world ${FAR} -60 0`);
+    await wait(3000);
+    at = serverLog.length;
+    ev = await events();
+    consoleCmd("execute in minecraft:the_end run tp FarBot 0 70 0");
+    check("DialogCloseEvent: /tp to another world is SCREEN",
+      await logged(/EVENT close dialog=folia:events reason=SCREEN .*on=owner/, at, 8000));
+    consoleCmd(`execute in minecraft:overworld run tp FarBot ${FAR} -60 0`);
+    await wait(3000);
+  }
+
   // ---- a drawn dialog ---------------------------------------------------
   n = far.dialogs.length;
   far.chat("/sample-social");
@@ -199,10 +279,41 @@ function click(bot, token) {
   }
   const setting = drawn ? drawnClicks(drawn).find((cmd) => / var /.test(cmd)) : null;
   if (setting) {
+    at = serverLog.length;
     n = far.dialogs.length;
     far.chat(setting);
     check("a drawn dialog's setting is kept and the page drawn again", !!await nextDialog(far, n));
+    check("DialogSettingChangeEvent: the setting, its old value and its new",
+      await logged(/EVENT setting dialog=samples:social name=\w+ old=\S* new=\S+ on=owner/, at));
+    check("a page turn or a setting is not a close", !/EVENT close dialog=samples:social/.test(serverLog.slice(at)));
   }
+  const shut = drawn ? drawnClicks(drawn).find((cmd) => / page close$/.test(cmd)) : null;
+  at = serverLog.length;
+  if (shut) far.chat(shut);
+  check("DialogCloseEvent: a drawn dialog's Close (and Escape) is EXIT",
+    !!shut && await logged(/EVENT close dialog=samples:social reason=EXIT button=exit .*on=owner/, at));
+
+  // A drawn piece's actions fire DialogClickEvent too, with the player's settings.
+  n = far.dialogs.length;
+  far.chat("/sample-punish NearBot");
+  let punish = null;
+  for (const until = Date.now() + 30000; !punish && Date.now() < until; await wait(200)) {
+    punish = far.dialogs.slice(n).find((d) => drawnClicks(d).some((cmd) => / act /.test(cmd))) || null;
+  }
+  // A setting first, so the click has one to report (the samples were drawn before Studio sent defaults).
+  const pick = punish ? drawnClicks(punish).find((cmd) => / var pun_\w+ /.test(cmd)) : null;
+  const picked = pick ? pick.match(/ var (pun_\w+) (\S+)/) : null;
+  if (pick) {
+    n = far.dialogs.length;
+    far.chat(pick);
+    punish = await nextDialog(far, n) || punish;
+  }
+  const act = punish ? drawnClicks(punish).find((cmd) => / act /.test(cmd)) : null;
+  at = serverLog.length;
+  if (act) far.chat(act);
+  check(`DialogClickEvent: a drawn dialog's piece, with its settings (${picked ? picked[1] : "none"})`,
+    !!act && !!picked && await logged(new RegExp(`EVENT click dialog=samples:punish button=act_\\d+ drawn=true inputs=\\{\\} `
+      + `settings=\\{[^}]*${picked[1]}=${picked[2]}[^}]*\\} on=owner`), at));
 
   // ---- reloads from a player and from the console -----------------------
   c = near.chatLog.length;
@@ -217,7 +328,13 @@ function click(bot, token) {
   consoleCmd("de open folia:menu FarBot");
   check("dialogs still open after the reloads", !!await nextDialog(far, n));
 
+  at = serverLog.length;
+  n = near.dialogs.length;
+  consoleCmd("de open folia:events NearBot");
+  await nextDialog(near, n);
   near.quit();
+  check("DialogCloseEvent: leaving the server is QUIT",
+    await logged(/EVENT close dialog=folia:events reason=QUIT .*player=NearBot .*on=owner/, at));
   far.quit();
   await wait(1500);
   process.exit(0);

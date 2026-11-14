@@ -301,6 +301,31 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         engine.forget(event.getPlayer());
     }
 
+    // A dialog is a screen, and each of these puts another screen up in its
+    // place: a container, the death screen, a new world's loading screen.
+    // DialogCloseEvent says the dialog went with it.
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryOpen(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (event.getPlayer() instanceof org.bukkit.entity.Player player) engine.otherScreen(player);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        engine.otherScreen(event.getEntity());
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent event) {
+        engine.otherScreen(event.getPlayer());
+    }
+
+    /** Folia does not fire PlayerChangedWorldEvent for a teleport to another world; this one it does. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(org.bukkit.event.player.PlayerTeleportEvent event) {
+        if (event.getTo() != null && event.getFrom().getWorld() != event.getTo().getWorld()) engine.otherScreen(event.getPlayer());
+    }
+
     @EventHandler
     public void onPluginDisable(PluginDisableEvent event) {
         if (event.getPlugin() != this) engine.unregister(event.getPlugin());

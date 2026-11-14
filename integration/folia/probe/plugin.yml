@@ -1,0 +1,9 @@
+name: EventProbe
+version: '1'
+main: probe.EventProbe
+api-version: '1.21'
+folia-supported: true
+depend: [DialogEngine]
+commands:
+  probetp: {}
+  probechest: {}

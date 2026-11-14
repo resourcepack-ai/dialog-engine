@@ -12,6 +12,10 @@ import ai.resourcepack.dialogruntime.DialogVariables;
 import ai.resourcepack.dialogruntime.Placeholders;
 import ai.resourcepack.common.scheduler.Tasks;
 import ai.resourcepack.common.quick.StandIn;
+import ai.resourcepack.dialogs.api.event.DialogClickEvent;
+import ai.resourcepack.dialogs.api.event.DialogCloseEvent;
+import ai.resourcepack.dialogs.api.event.DialogSettingChangeEvent;
+import ai.resourcepack.dialogs.api.event.DialogSlotMoveEvent;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.ClickCtx;
@@ -41,6 +45,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -231,7 +236,17 @@ public final class DrawnDialogs {
     private synchronized DialogSlots<String> slots() {
         // Synchronized: two regions asking at once must share one, or each
         // keeps its own idea of what a player has picked up.
-        if (slots == null) slots = new DialogSlots<>(engine.plugin());
+        if (slots == null) {
+            slots = new DialogSlots<>(engine.plugin());
+            // Every move is asked of DialogSlotMoveEvent first. The runtime keys a drawing's slots by its id.
+            slots.gate((player, dialog, from, to, moving, onto) -> {
+                if (DialogSlotMoveEvent.getHandlerList().getRegisteredListeners().length == 0) return true;
+                DialogSlotMoveEvent event = new DialogSlotMoveEvent(player, dialog, from, to,
+                        moving == null ? null : moving.clone(), onto == null ? null : onto.clone());
+                Bukkit.getPluginManager().callEvent(event);
+                return !event.isCancelled();
+            });
+        }
         return slots;
     }
 
@@ -261,6 +276,25 @@ public final class DrawnDialogs {
     public Optional<String> settingOrDefault(Player player, String name) {
         Optional<String> own = setting(player, name);
         return own.isPresent() ? own : defaultOf(name);
+    }
+
+    /**
+     * Drawn dialog {@code id}'s settings as the player has them, by name: their
+     * own value, else the dialog's default, else another dialog's. What
+     * {@code DialogClickEvent} and {@code DialogCloseEvent} hand a plugin as
+     * the player's changes. Empty for a dialog that is not drawn or binds none.
+     */
+    public Map<String, String> settings(Player player, String id) {
+        Drawn d = id == null ? null : dialogs.get(id.toLowerCase(Locale.ROOT));
+        if (d == null || d.vars().isEmpty()) return Map.of();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (String name : d.vars().keySet()) {
+            Optional<String> value = setting(player, name);
+            if (value.isEmpty()) value = Optional.ofNullable(d.defaults().get(name));
+            if (value.isEmpty()) value = defaultOf(name);
+            value.ifPresent(v -> out.put(name, v));
+        }
+        return Collections.unmodifiableMap(out);
     }
 
     /** The default a loaded dialog shows for a setting, if one names it. */
@@ -1015,7 +1049,8 @@ public final class DrawnDialogs {
         if (d != null && d.waits.contains(shown.page)) engine.clickedWaiting(player);
         if (args[0].equalsIgnoreCase("page") && args.length >= 2 && args[1].equalsIgnoreCase("close")) {
             if (picture(json, command) || picture(seen, command)) clickSound(player, d, shown, command);
-            engine.closeDialog(player);
+            // Escape runs this too: it is the notice's own button, which Escape presses.
+            engine.closeDialog(player, DialogCloseEvent.Reason.EXIT, "exit");
             return;
         }
         if (d == null || !(holds(json, command) || holds(seen, command))) return;
@@ -1043,9 +1078,22 @@ public final class DrawnDialogs {
             String name = args[1].toLowerCase(Locale.ROOT);
             String value = args[2];
             if (!d.vars.getOrDefault(name, Set.of()).contains(value)) return;
-            variables().set(player, name, value);
             String page = args.length >= 4 ? args[3].toLowerCase(Locale.ROOT) : shown.page;
-            Tasks.on(engine.plugin(), player, () -> showPage(player, d, page, shown.session));
+            Tasks.on(engine.plugin(), player, () -> {
+                Optional<String> was = setting(player, name);
+                if (was.isEmpty()) was = Optional.ofNullable(d.defaults().get(name));
+                String old = was.orElse(null);
+                boolean change = !value.equals(old);
+                if (change && DialogSettingChangeEvent.getHandlerList().getRegisteredListeners().length > 0) {
+                    DialogSettingChangeEvent event = new DialogSettingChangeEvent(player, d.id, name, old, value);
+                    Bukkit.getPluginManager().callEvent(event);
+                    change = !event.isCancelled();
+                }
+                if (change) variables().set(player, name, value);
+                // Refused, it is drawn again as it was: the control the client already moved moves back.
+                // Turning to another page with it still turns.
+                showPage(player, d, page, shown.session);
+            });
         } else if (args[0].equalsIgnoreCase("slot") && args.length == 2) {
             // A live slot's click: picks a stack up or puts it down (RP Engine's
             // DialogSlots), then the page again with the items where they now are.
@@ -1081,7 +1129,13 @@ public final class DrawnDialogs {
                 // A page that waits, or is seamless, is answered when its actions
                 // end (ClickCtx.finish): by the next dialog, or by a close.
                 ctx.answering(d.answering(shown.page));
-                engine.run(ctx, d.actions.get(n));
+                // Named by its [event], filled from what the picture was: a list row's id is that row's.
+                List<String> list = new ArrayList<>(d.actions.get(n));
+                ctx.named(list);
+                DialogClickEvent event = new DialogClickEvent(ctx, list, settings(player, d.id), true);
+                Bukkit.getPluginManager().callEvent(event);
+                if (event.isCancelled()) ctx.finish();
+                else engine.run(ctx, list);
                 if (ctx.responded || !player.isOnline() || lastShown.get(uuid) == null || lastShown.get(uuid).nonce != null) return;
                 // The nonce is spent. A page that stays up when clicked is drawn
                 // again with a fresh one, so its next click works; any other

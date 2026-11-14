@@ -236,6 +236,7 @@ Run in order. A line without a `[tag]` is a command the player runs.
 | `[if] condition` | Stop here unless it holds |
 | `[permission] node` | Stop here unless the player has it |
 | `[url] link` / `[copy] text` / `[suggest] /cmd` | As a button's only action these are the client's own (open the link, copy, fill the chat box). The server never hears that such a button was pressed, so a dialog with one is shown as `after: close` even under `wait` |
+| `[event] id` | Nothing by itself: names the click `id` for `DialogClickEvent` (see Events). Placeholders work |
 | `[myplugin:tag] ...` | Whatever another plugin registered |
 
 **What a player typed, in a command.** A `[console]` or `[player]` command
@@ -397,23 +398,33 @@ anything else reads through PlaceholderAPI as `%dialogengine_setting_<name>%`
 list's rows are values like any other: `warps_3` is row three, `warps_3_note`
 its `note` field and `warps_count` how many there are.
 
-A drawn dialog does not fire `DialogClickEvent`: its pieces are not YAML
-buttons with an `id:`. To answer one in Java, register an action and name it
-in the piece's command. In the editor that is **When clicked** set to **Run
-command**, with `[myplugin:claim] daily` (or several, `[a] ...; [b] ...`).
-A command with no brackets is run by the player, as on any dialog.
+A drawn dialog's pieces fire `DialogClickEvent` too. A piece has no `id:`, so
+name it in its command: in the editor, **When clicked** set to **Run command**,
+with `[event] claim`. One listener then answers a whole menu, with the
+player's settings in the event. Registering an action and naming it there,
+`[myplugin:claim] daily` (or several, `[a] ...; [b] ...`), works as well. A
+command with no brackets is run by the player, as on any dialog.
 
 ### Events
 
 | Event | |
 |---|---|
 | `DialogOpenEvent` | A dialog is about to be drawn. Cancellable; `values()` can be changed |
-| `DialogClickEvent` | A button on a YAML dialog was pressed, its inputs passed, its actions not yet run. Cancellable; `getButtonId()`, `getInputs()`, `getActions()` (changeable), and `getContext()` to open, refresh or close. Not fired by a drawn dialog |
+| `DialogClickEvent` | A button was pressed, its inputs passed, its actions not yet run. Cancellable; `getButtonId()`, `getInputs()`, `getSettings()` (a drawn dialog's), `getValues()`, `getActions()` (changeable), `isDrawn()`, and `getContext()` to open, refresh or close |
+| `DialogCloseEvent` | A dialog left the screen. `getReason()`: `EXIT` (the exit button, or Escape, which presses it), `BUTTON`, `REPLACED` (`getNextDialogId()`), `SCREEN` (a container, the death screen, another world), `PLUGIN` or `QUIT`; `getButtonId()`, `getValues()`, `getSettings()` |
+| `DialogSettingChangeEvent` | A drawn dialog's switch, slider or dropdown is about to change a setting. Cancellable |
+| `DialogSlotMoveEvent` | A stack is about to move between a drawn dialog's item slots. Cancellable |
 | `DialogInputErrorEvent` | An input failed its check; the message can be changed |
 | `DialogEngineReloadEvent` | Everything was read again |
 
 A button with an `id:` and no actions is a button your plugin answers in
-`DialogClickEvent`.
+`DialogClickEvent`, and so is one whose actions say `[event] <id>`, which is
+how a drawn dialog's pieces get one.
+
+Escape reaches the server only as a press of the exit button, so a YAML dialog
+with buttons and no `exit:` closes with Escape unheard: give it an `exit:`
+when you need `DialogCloseEvent`. Folia tells plugins nothing about a move to
+another world, so there that close is not reported either.
 
 Values you pass are read as MiniMessage. Anything a player wrote goes through
 `dialogs.escape(...)` first.

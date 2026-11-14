@@ -26,6 +26,12 @@ sent 3,000 blocks away, so the two are in different regions. Then:
   failing console command that has to stop the actions after it
 - a drawn dialog (the samples' Social menu), its pack, a page turn and a setting
 - `/de reload` typed by a player and by the console
+- the API's events, as a plugin hears them: `probe/EventProbe.java` is
+  compiled against the jar under test and logs each one, and the session
+  checks every `DialogCloseEvent` reason (exit, button, `[close]`, another
+  dialog, a chest, quitting, and on Paper another world), `DialogClickEvent`
+  named by `[event]` and fired by a drawn dialog with its settings,
+  `DialogSettingChangeEvent`, and that each arrives on the player's own thread
 - a clean stop
 
 Every `CHECK` line it prints is one thing a player saw. **The run also fails on
