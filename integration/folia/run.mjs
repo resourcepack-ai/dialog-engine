@@ -63,6 +63,29 @@ const DIALOGS = {
     "    - second",
     "",
   ].join("\n"),
+  // The events a plugin hears (EventProbe logs them): every way a dialog closes, and a click named by [event].
+  "folia/events.yml": [
+    "events:",
+    "  title: Events",
+    "  command: foliaevents",
+    "  body:",
+    "    - events",
+    "  buttons:",
+    "    - label: Named",
+    "      actions:",
+    "        - \"[event] picked_{player}\"",
+    "        - \"[message] named-ran\"",
+    "    - label: Shut",
+    "      id: shut",
+    "      actions:",
+    "        - \"[close]\"",
+    "    - label: Onward",
+    "      actions:",
+    "        - \"[open] folia:next\"",
+    "  exit:",
+    "    label: Leave",
+    "",
+  ].join("\n"),
 };
 
 /**
@@ -95,6 +118,33 @@ function java() {
   return process.env.JAVA_HOME
     ? path.join(process.env.JAVA_HOME, "bin", process.platform === "win32" ? "java.exe" : "java")
     : "java";
+}
+
+/** The spigot-api jar Gradle already has, which the probe compiles against. */
+async function spigotApi() {
+  const base = path.join(process.env.USERPROFILE || process.env.HOME || "", ".gradle", "caches", "modules-2",
+    "files-2.1", "org.spigotmc", "spigot-api", "1.21.8-R0.1-SNAPSHOT");
+  for (const hash of await fs.readdir(base).catch(() => [])) {
+    for (const file of await fs.readdir(path.join(base, hash))) {
+      if (/^spigot-api-.*\.jar$/.test(file) && !/sources|javadoc/.test(file)) return path.join(base, hash, file);
+    }
+  }
+  throw new Error(`No spigot-api 1.21.8 in ${base}: build Dialog Engine once with Gradle first.`);
+}
+
+/** Compiles probe/EventProbe.java into plugins/EventProbe.jar, against the Dialog Engine jar under test. */
+async function probe(engineJar) {
+  const bin = (name) => process.env.JAVA_HOME
+    ? path.join(process.env.JAVA_HOME, "bin", process.platform === "win32" ? `${name}.exe` : name)
+    : name;
+  const classes = path.join(WORK, "probe-classes");
+  await fs.mkdir(classes, { recursive: true });
+  const cp = [await spigotApi(), engineJar].join(path.delimiter);
+  const javac = spawnSync(bin("javac"), ["-d", classes, "-cp", cp, path.join(HERE, "probe", "EventProbe.java")], { stdio: "inherit" });
+  if (javac.status !== 0) throw new Error("The event probe did not compile.");
+  await fs.copyFile(path.join(HERE, "probe", "plugin.yml"), path.join(classes, "plugin.yml"));
+  const jar = spawnSync(bin("jar"), ["cf", path.join(WORK, "plugins", "EventProbe.jar"), "-C", classes, "."], { stdio: "inherit" });
+  if (jar.status !== 0) throw new Error("The event probe did not package.");
 }
 
 function build() {
@@ -146,10 +196,9 @@ async function prepare(jar) {
   await fs.rm(WORK, { recursive: true, force: true });
   await fs.mkdir(path.join(WORK, "plugins"), { recursive: true });
   await fs.copyFile(jar, path.join(WORK, "folia.jar"));
-  await fs.copyFile(
-    jarArg ? path.resolve(jarArg) : path.join(ROOT, "build", "libs", `dialog-engine-${await version()}.jar`),
-    path.join(WORK, "plugins", "DialogEngine.jar"),
-  );
+  const engineJar = jarArg ? path.resolve(jarArg) : path.join(ROOT, "build", "libs", `dialog-engine-${await version()}.jar`);
+  await fs.copyFile(engineJar, path.join(WORK, "plugins", "DialogEngine.jar"));
+  await probe(engineJar);
   await fs.writeFile(path.join(WORK, "eula.txt"), "eula=true\n");
   await fs.writeFile(path.join(WORK, "server.properties"), [
     `server-port=${PORT}`,
@@ -192,7 +241,8 @@ function play() {
       if (!started && /Done \(/.test(chunk.toString())) {
         started = true;
         say("Folia is up. Two players join…");
-        session = spawn(process.execPath, [path.join(HERE, "session.cjs"), String(PORT)], { cwd: HERE });
+        const kind = /paper/i.test(path.basename(foliaArg || "")) ? "paper" : "folia";
+        session = spawn(process.execPath, [path.join(HERE, "session.cjs"), String(PORT), kind], { cwd: HERE });
         readline.createInterface({ input: session.stdout }).on("line", (line) => {
           const console_ = line.match(/^CONSOLE (.*)$/);
           if (console_) {

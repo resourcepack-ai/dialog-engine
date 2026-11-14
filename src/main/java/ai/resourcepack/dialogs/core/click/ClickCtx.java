@@ -1,6 +1,7 @@
 package ai.resourcepack.dialogs.core.click;
 
 import ai.resourcepack.dialogs.api.ClickContext;
+import ai.resourcepack.dialogs.api.event.DialogCloseEvent;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.placeholder.Scope;
@@ -12,6 +13,7 @@ import org.bukkit.entity.Player;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -23,7 +25,11 @@ public final class ClickCtx implements ClickContext {
     final Player player;
     final DialogDef def;
     Session session;
-    private final String buttonId;
+    private String buttonId;
+    /** The button is one Escape presses (the exit button, a confirmation's cancel): its close is an EXIT. */
+    private boolean exit;
+    /** The client closed the dialog itself on this click ({@code after: close}), and that has been reported. */
+    private boolean closeReported;
     private final Map<String, String> inputs;
     private final String alias;
     private final Map<String, String> row;
@@ -74,6 +80,25 @@ public final class ClickCtx implements ClickContext {
         if (sentAs != null) after = sentAs;
     }
 
+    /** The button is one Escape presses, so a close it makes is reported as {@code EXIT}. */
+    public void exit(boolean exit) {
+        this.exit = exit;
+    }
+
+    /**
+     * Names the click by its {@code [event] <id>}, when its actions have one:
+     * that id, its placeholders filled, is the button's id from now on. How a
+     * drawn dialog's piece, which has no {@code id:}, is told apart.
+     */
+    public void named(List<String> actions) {
+        String id = Actions.eventId(actions);
+        if (id != null) buttonId = Text.fill(id, scope(), Text.Mode.RAW).trim();
+    }
+
+    private DialogCloseEvent.Reason closeReason() {
+        return exit ? DialogCloseEvent.Reason.EXIT : DialogCloseEvent.Reason.BUTTON;
+    }
+
     /** Whether the client is waiting on the engine to answer this click (wait or seamless). */
     boolean awaitsAnswer() {
         return !responded && after.awaitsAnswer();
@@ -85,12 +110,21 @@ public final class ClickCtx implements ClickContext {
      * at a seamless dialog that never goes away.
      */
     public void finish() {
+        // The client closed it on the click, and nothing has been shown since: it is gone. Escape closes
+        // even a dialog that stays open after a press (the game runs the exit button's action and closes),
+        // and the server cannot tell Escape from the button, so an exit press there is a close too.
+        boolean clientClosed = after == Defs.After.CLOSE || (exit && after == Defs.After.NONE);
+        if (!responded && !closeReported && clientClosed && player.isOnline()) {
+            closeReported = true;
+            engine.closed(player, closeReason(), buttonId);
+            return;
+        }
         if (!awaitsAnswer() || !player.isOnline()) return;
         responded = true;
         // Not straight away: an action may have asked a plugin to open the next
         // dialog a moment from now. Closing first would flash the world between
         // the two. See Engine.answer for how long.
-        engine.answer(player, after);
+        engine.answer(player, after, closeReason(), buttonId);
     }
 
     /**
@@ -101,7 +135,7 @@ public final class ClickCtx implements ClickContext {
     void closeNow() {
         if (!awaitsAnswer()) return;
         responded = true;
-        engine.closeDialog(player);
+        engine.closeDialog(player, closeReason(), buttonId);
     }
 
     @Override
@@ -241,7 +275,7 @@ public final class ClickCtx implements ClickContext {
 
     @Override
     public void close() {
-        engine.closeDialog(player);
+        engine.closeDialog(player, closeReason(), buttonId);
         responded = true;
     }
 

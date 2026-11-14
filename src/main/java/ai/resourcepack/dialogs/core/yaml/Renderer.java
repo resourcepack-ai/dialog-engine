@@ -136,7 +136,8 @@ public final class Renderer {
         label.addProperty("translate", "gui.ok");
         JsonObject button = new JsonObject();
         button.add("label", label);
-        String token = engine.clicks().bind(viewer, engine.clickLifetime(), drawing, (clicker, payload) -> engine.closeDialog(clicker));
+        String token = engine.clicks().bind(viewer, engine.clickLifetime(), drawing, (clicker, payload) -> engine.closeDialog(clicker,
+                ai.resourcepack.dialogs.api.event.DialogCloseEvent.Reason.EXIT, "exit"));
         button.add("action", Clicks.action(token));
         return button;
     }

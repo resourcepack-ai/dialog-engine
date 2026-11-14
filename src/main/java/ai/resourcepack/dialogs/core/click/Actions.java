@@ -56,6 +56,25 @@ public final class Actions {
         }
     }
 
+    /**
+     * The id a click's actions give it with {@code [event] <id>}, the first
+     * such line's first word as written (placeholders and all), or null when
+     * none does. {@code DialogClickEvent} reports it as the button's id, which
+     * is how a drawn dialog's piece is named: it has no {@code id:}.
+     */
+    public static String eventId(List<String> actions) {
+        for (String line : actions) {
+            if (line == null || line.isBlank()) continue;
+            Line parsed = Line.of(line);
+            if (!parsed.tag().equals("event")) continue;
+            String arg = parsed.arg().trim();
+            int space = arg.indexOf(' ');
+            String id = space < 0 ? arg : arg.substring(0, space);
+            if (!id.isEmpty()) return id;
+        }
+        return null;
+    }
+
     /** The actions that answer a click themselves: each shows a dialog or closes the screen. */
     private static final Set<String> ANSWERS = Set.of("open", "dialog", "back", "refresh", "reopen", "page", "close");
 
@@ -253,6 +272,9 @@ public final class Actions {
                     if (mentionsUntrusted(raw, ctx)) untrusted.add(key);
                 }
                 ctx.open(Text.fill(rawTokens.get(0), ctx.scope(), Text.Mode.RAW), extra, untrusted);
+            }
+            // Names the click for DialogClickEvent, which has already fired: nothing to do here.
+            case "event" -> {
             }
             case "back" -> ctx.back();
             case "refresh", "reopen" -> ctx.refresh();

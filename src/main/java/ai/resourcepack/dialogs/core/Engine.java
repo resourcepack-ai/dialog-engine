@@ -8,6 +8,7 @@ import ai.resourcepack.dialogs.api.DialogInfo;
 import ai.resourcepack.dialogs.api.ListProvider;
 import ai.resourcepack.dialogs.api.PlaceholderResolver;
 import ai.resourcepack.dialogs.api.event.DialogClickEvent;
+import ai.resourcepack.dialogs.api.event.DialogCloseEvent;
 import ai.resourcepack.dialogs.api.event.DialogEngineReloadEvent;
 import ai.resourcepack.dialogs.api.event.DialogInputErrorEvent;
 import ai.resourcepack.dialogs.api.event.DialogOpenEvent;
@@ -103,6 +104,13 @@ public final class Engine implements DialogEngineAPI {
      * {@link #closeDialog} for why it matters.
      */
     private final Set<UUID> onWaitingScreen = ConcurrentHashMap.newKeySet();
+    /**
+     * The dialog on each player's screen as far as the engine can tell, for
+     * {@link DialogCloseEvent}: set when one is shown or clicked, taken away
+     * (and the event fired) when it goes. Not {@link #sessions}, which outlives
+     * a close so that {@code [back]} and the API still have the last values.
+     */
+    private final Map<UUID, Session> onScreen = new ConcurrentHashMap<>();
     /** Each player's clicks this second: {second, count}. */
     private final Map<UUID, long[]> clickRate = new ConcurrentHashMap<>();
     /**
@@ -437,10 +445,12 @@ public final class Engine implements DialogEngineAPI {
         drawnPack.stop();
         commands.clear();
         sessions.clear();
+        onScreen.clear();
         clicks.clear();
     }
 
     public void forget(Player player) {
+        closed(player, DialogCloseEvent.Reason.QUIT, null);
         drawn.forget(player);
         drawnPack.forget(player);
         awaitingOthers.remove(player.getUniqueId());
@@ -457,8 +467,13 @@ public final class Engine implements DialogEngineAPI {
         quick.forget(player.getUniqueId());
     }
 
-    /** Closes the player's dialog, and with it every button it had. */
+    /** Closes the player's dialog, and with it every button it had: after a button press that nothing else answered. */
     public void closeDialog(Player player) {
+        closeDialog(player, DialogCloseEvent.Reason.BUTTON, null);
+    }
+
+    /** Closes the player's dialog for {@code reason}, which {@link DialogCloseEvent} reports. */
+    public void closeDialog(Player player, DialogCloseEvent.Reason reason, String buttonId) {
         Platform.closeDialog(player);
         // The game's clear_dialog closes a DIALOG and nothing else, and the
         // screen a "wait" button leaves up is not one: the client kept showing
@@ -467,6 +482,8 @@ public final class Engine implements DialogEngineAPI {
         if (onWaitingScreen.remove(player.getUniqueId())) Platform.closeScreen(player);
         clicks.forgetScreen(player.getUniqueId());
         drawn.retire(player);
+        // Last, once it is shut: a listener that opens another dialog must not have it closed under it.
+        closed(player, reason, buttonId);
     }
 
     /**
@@ -485,13 +502,13 @@ public final class Engine implements DialogEngineAPI {
 
     /** Closes the player's dialog after close-delay-ticks, unless another dialog reaches them first. */
     public void closeUnlessShown(Player player) {
-        closeUnlessShown(player, closeDelay);
+        closeUnlessShown(player, closeDelay, DialogCloseEvent.Reason.BUTTON, null);
     }
 
-    private void closeUnlessShown(Player player, long delay) {
+    private void closeUnlessShown(Player player, long delay, DialogCloseEvent.Reason reason, String buttonId) {
         long before = shown.getOrDefault(player.getUniqueId(), 0L);
         Runnable close = () -> {
-            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player);
+            if (player.isOnline() && shown.getOrDefault(player.getUniqueId(), 0L) == before) closeDialog(player, reason, buttonId);
         };
         if (delay == 0) close.run();
         else Tasks.onLater(plugin, player, close, delay);
@@ -506,8 +523,63 @@ public final class Engine implements DialogEngineAPI {
      * holding it that long would read as the button not working: the next tick.
      */
     public void answer(Player player, Defs.After after) {
-        if (after == Defs.After.WAIT_FOR_RESPONSE) closeUnlessShown(player, closeDelay);
-        else if (after == Defs.After.SEAMLESS) closeUnlessShown(player, 1);
+        answer(player, after, DialogCloseEvent.Reason.BUTTON, null);
+    }
+
+    /** {@link #answer}, with the close {@link DialogCloseEvent} reports: which button, and whether it was the exit. */
+    public void answer(Player player, Defs.After after, DialogCloseEvent.Reason reason, String buttonId) {
+        if (after == Defs.After.WAIT_FOR_RESPONSE) closeUnlessShown(player, closeDelay, reason, buttonId);
+        else if (after == Defs.After.SEAMLESS) closeUnlessShown(player, 1, reason, buttonId);
+    }
+
+    // ------------------------------------------------------------------ what is on the screen
+
+    /**
+     * {@code session}'s dialog is on the player's screen now. The one there
+     * before, when it is a different dialog, has closed: replaced by this one.
+     * The same dialog again (a refresh, a page, a setting) is not a close.
+     */
+    public void onScreen(Player player, Session session) {
+        Session before = onScreen.put(player.getUniqueId(), session);
+        if (before != null && !before.dialogId.equals(session.dialogId)) {
+            fireClose(player, before, DialogCloseEvent.Reason.REPLACED, null, session.dialogId);
+        }
+    }
+
+    /** A dialog the engine does not keep as open (raw JSON) took the screen: the one there before went. */
+    private void replacedBy(Player player, String next) {
+        Session before = onScreen.remove(player.getUniqueId());
+        if (before != null && !before.dialogId.equals(next)) fireClose(player, before, DialogCloseEvent.Reason.REPLACED, null, next);
+    }
+
+    /** The player's dialog has gone from their screen, for {@code reason}. Nothing when the engine knew of none. */
+    public void closed(Player player, DialogCloseEvent.Reason reason, String buttonId) {
+        Session gone = onScreen.remove(player.getUniqueId());
+        if (gone != null) fireClose(player, gone, reason, buttonId, null);
+    }
+
+    /**
+     * A container, the death screen or another world's loading screen has
+     * taken the player's screen, and whatever dialog was on it went with it:
+     * the game puts each of those up in place of the screen it had.
+     */
+    public void otherScreen(Player player) {
+        closed(player, DialogCloseEvent.Reason.SCREEN, null);
+    }
+
+    private void fireClose(Player player, Session gone, DialogCloseEvent.Reason reason, String buttonId, String next) {
+        if (DialogCloseEvent.getHandlerList().getRegisteredListeners().length == 0) return;
+        Map<String, String> values = Collections.unmodifiableMap(new LinkedHashMap<>(gone.values));
+        Runnable fire = () -> Bukkit.getPluginManager().callEvent(new DialogCloseEvent(player, gone.dialogId, values,
+                settings(player, gone.dialogId), reason, buttonId, next));
+        // A close can come from a network thread (a failed click) or another region: the event is the player's.
+        if (Tasks.owns(player)) fire.run();
+        else Tasks.on(plugin, player, fire);
+    }
+
+    /** A drawn dialog's settings as the player has them, by name, defaults filled in; empty for a YAML one. */
+    public Map<String, String> settings(Player player, String dialogId) {
+        return drawn.settings(player, dialogId);
     }
 
     /**
@@ -556,6 +628,7 @@ public final class Engine implements DialogEngineAPI {
             Bukkit.getPluginManager().callEvent(event);
             if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;
             sessions.put(player.getUniqueId(), session);
+            onScreen(player, session);
             shown.merge(player.getUniqueId(), 1L, Long::sum);
             shownAfter.remove(player.getUniqueId());
             onWaitingScreen.remove(player.getUniqueId());
@@ -584,6 +657,9 @@ public final class Engine implements DialogEngineAPI {
             sessions.put(player.getUniqueId(), session);
             shown.put(player.getUniqueId(), drawing);
             shownAfter.put(player.getUniqueId(), sentAs);
+            // A raw JSON dialog never calls back, so nothing would ever say it closed: it is not kept as open.
+            if (def.json() == null) onScreen(player, session);
+            else replacedBy(player, def.id());
             onWaitingScreen.remove(player.getUniqueId());
             // Only the screen the player now has can be pressed: the one before is gone.
             clicks.retire(player.getUniqueId(), drawing);
@@ -660,7 +736,7 @@ public final class Engine implements DialogEngineAPI {
         if (alias != null && !row.isEmpty()) drawnScope = drawnScope.withRow(alias, row);
         if ((button.permission() != null && !player.hasPermission(button.permission())) || !Conditions.test(button.condition(), drawnScope)) {
             Platform.send(player, Text.MM.deserialize(message("no-permission", "<red>You can't do that.")));
-            answer(player, sentAs);
+            answer(player, sentAs, DialogCloseEvent.Reason.BUTTON, button.id());
             return;
         }
 
@@ -720,9 +796,12 @@ public final class Engine implements DialogEngineAPI {
             }
         }
 
+        List<String> list = new ArrayList<>(button.actions());
         ClickCtx ctx = new ClickCtx(this, player, def, session.with(values, untrusted), button.id(), typed, alias, row);
         ctx.answering(sentAs);
-        List<String> list = new ArrayList<>(button.actions());
+        ctx.named(list);
+        // The buttons Escape presses: the exit button, and a confirmation's cancel.
+        ctx.exit(button == def.exit() || (def.type() == Defs.Type.CONFIRMATION && def.buttons().size() > 1 && button == def.buttons().get(1)));
         DialogClickEvent event = new DialogClickEvent(ctx, list);
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) {
@@ -810,6 +889,8 @@ public final class Engine implements DialogEngineAPI {
 
     public void remember(Player player, Session session) {
         sessions.put(player.getUniqueId(), session);
+        // A click is proof the dialog is on the screen, even one the server never sent (the Quick Actions key's).
+        onScreen(player, session);
     }
 
     Session session(Player player) {
@@ -838,7 +919,7 @@ public final class Engine implements DialogEngineAPI {
     @Override
     public void close(Player player) {
         sessions.remove(player.getUniqueId());
-        closeDialog(player);
+        closeDialog(player, DialogCloseEvent.Reason.PLUGIN, null);
     }
 
     @Override

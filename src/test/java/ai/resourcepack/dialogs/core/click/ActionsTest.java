@@ -2,10 +2,13 @@ package ai.resourcepack.dialogs.core.click;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Which action arguments carry what a player typed. */
@@ -16,6 +19,15 @@ class ActionsTest {
         assertTrue(Actions.mentionsAny("reason={typed|raw}", Set.of("typed")));
         assertTrue(Actions.mentionsAny("reason={typed?a:b|c}", Set.of("typed")));
         assertFalse(Actions.mentionsAny("reason={other}", Set.of("typed")));
+    }
+
+    /** {@code [event] <id>} names a click for DialogClickEvent: the first one, its first word, as written. */
+    @Test
+    void anEventLineNamesTheClick() {
+        assertEquals("buy_sword", Actions.eventId(List.of("[event] buy_sword")));
+        assertEquals("warp:{warps}", Actions.eventId(List.of("[sound] ui.button.click", "[EVENT]  warp:{warps}  extra", "[event] later")));
+        assertNull(Actions.eventId(List.of("[console] say hi", "[event]")));
+        assertNull(Actions.eventId(List.of("event buy", "[events] buy")));
     }
 
     /**
