@@ -113,6 +113,18 @@ public final class DialogEnginePlugin extends JavaPlugin implements Listener {
         banner.ok("Dialogs", engine.ids().size() + (engine.ids().size() == 1 ? " dialog" : " dialogs")
                 + ", shown through " + engine.route());
         banner.ok("Clicks", clicks + "'s event");
+        // %dialogengine_...% for scoreboards, chat and other plugins. Only when
+        // PlaceholderAPI is enabled: PapiExpansion is the one class that names it,
+        // so a server without it never loads that class.
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            try {
+                if (ai.resourcepack.dialogs.core.placeholder.PapiExpansion.register(this, engine)) {
+                    banner.ok("PlaceholderAPI", "%dialogengine_setting_<name>% and the rest");
+                }
+            } catch (LinkageError | RuntimeException e) {
+                getLogger().warning("Could not register with PlaceholderAPI: " + e);
+            }
+        }
         updates.start();
 
         // Anonymous usage counting, the only telemetry this plugin has: a

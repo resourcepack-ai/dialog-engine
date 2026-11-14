@@ -130,7 +130,7 @@ public final class DrawnDialogs {
     public record Drawn(String id, File dir, String first, Map<String, String> pages, Map<String, Set<String>> vars,
                  String command, String permission, List<List<String>> actions, Set<String> staysUp, Set<String> waits,
                  Set<String> seamless, DialogDef def, Map<String, PageSounds> sounds, Map<String, Integer> itemIcons,
-                 Map<String, Set<String>> rowNames) {
+                 Map<String, Set<String>> rowNames, Map<String, String> defaults) {
 
         /** What a click on this page waits for: what has to answer it. */
         Defs.After answering(String page) {
@@ -243,6 +243,36 @@ public final class DrawnDialogs {
         return variables().get(player, name);
     }
 
+    /**
+     * What a player's setting reads as: their own value, or, when they have
+     * never set it, the default a loaded dialog shows for it (the first that
+     * names one). Empty when neither exists, which for a dialog drawn before
+     * Studio sent defaults (2026-11-14) is until the player clicks.
+     */
+    public Optional<String> settingOrDefault(Player player, String name) {
+        Optional<String> own = setting(player, name);
+        return own.isPresent() ? own : defaultOf(name);
+    }
+
+    /** The default a loaded dialog shows for a setting, if one names it. */
+    public Optional<String> defaultOf(String name) {
+        String key = name.toLowerCase(Locale.ROOT);
+        for (Drawn d : dialogs.values()) {
+            String value = d.defaults().get(key);
+            if (value != null) return Optional.of(value);
+        }
+        return Optional.empty();
+    }
+
+    /** Whether any loaded dialog declares this setting. */
+    public boolean declares(String name) {
+        String key = name.toLowerCase(Locale.ROOT);
+        for (Drawn d : dialogs.values()) {
+            if (d.vars().containsKey(key)) return true;
+        }
+        return false;
+    }
+
     public File folder() {
         return new File(engine.plugin().getDataFolder(), "drawn");
     }
@@ -341,6 +371,9 @@ public final class DrawnDialogs {
         Map<String, String> consoles = DrawnFiles.consoleCommands(spec);
         Map<String, String> pages = new LinkedHashMap<>();
         Map<String, Set<String>> vars = new LinkedHashMap<>();
+        // What a player who has never set each setting is shown: Studio's
+        // fallback, the first page's that says one.
+        Map<String, String> defaults = new LinkedHashMap<>();
         Set<String> staysUp = new LinkedHashSet<>();
         Set<String> waits = new LinkedHashSet<>();
         Set<String> seamless = new LinkedHashSet<>();
@@ -379,8 +412,12 @@ public final class DrawnDialogs {
             }
             if (page.has("vars")) {
                 for (JsonElement v : page.getAsJsonArray("vars")) {
-                    Set<String> values = vars.computeIfAbsent(v.getAsJsonObject().get("name").getAsString(), k -> new LinkedHashSet<>());
+                    String name = v.getAsJsonObject().get("name").getAsString();
+                    Set<String> values = vars.computeIfAbsent(name, k -> new LinkedHashSet<>());
                     for (JsonElement value : v.getAsJsonObject().getAsJsonArray("values")) values.add(value.getAsString());
+                    if (v.getAsJsonObject().get("fallback") instanceof JsonElement f && f.isJsonPrimitive()) {
+                        defaults.putIfAbsent(name, f.getAsString());
+                    }
                 }
             }
         }
@@ -407,7 +444,7 @@ public final class DrawnDialogs {
         });
         return new Drawn(id, dir, first, pages, vars, command, permission, List.copyOf(actions), Set.copyOf(staysUp),
                 Set.copyOf(waits), Set.copyOf(seamless), def, java.util.Collections.unmodifiableMap(sounds), Map.copyOf(itemIcons),
-                Map.copyOf(rowNames));
+                Map.copyOf(rowNames), Map.copyOf(defaults));
     }
 
     /**
@@ -902,6 +939,9 @@ public final class DrawnDialogs {
             if (stored.isPresent()) return stored;
             String own = scope.lookup(name);
             if (own != null) return Optional.of(own);
+            // A setting the player has never set reads as what its control shows.
+            Optional<String> fallback = defaultOf(name);
+            if (fallback.isPresent()) return fallback;
             return Optional.ofNullable(Papi.lookup(player, name));
         };
         return name -> {
