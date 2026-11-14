@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'ai.resourcepack'
-version = '0.7.1'
+version = '0.7.2'
 
 java {
     toolchain {
@@ -23,6 +23,8 @@ repositories {
     // spigot-api: the one API both servers have. Paper keeps Spigot's API, so
     // compiling against it is what makes one jar run on both.
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    // PlaceholderAPI, for the %dialogengine_...% expansion. Its own repository.
+    maven { url = 'https://repo.extendedclip.com/releases/' }
     // ai.resourcepack:common, our own shared plugin library. Exclusive: the
     // ai.resourcepack group is looked for here and nowhere else, so a
     // look-alike published to Central or any repository above cannot stand in
@@ -40,6 +42,9 @@ repositories {
 
 dependencies {
     compileOnly 'org.spigotmc:spigot-api:1.21.8-R0.1-SNAPSHOT'
+    // PlaceholderAPI: compileOnly, and only PapiExpansion names it, so a
+    // server without it loads this plugin as before.
+    compileOnly 'me.clip:placeholderapi:2.11.6'
 
     // MiniMessage and Adventure, shaded and relocated: Spigot has neither, and
     // Paper's own copy is left alone (ours never meets it). Gson is the

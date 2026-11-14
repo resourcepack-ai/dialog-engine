@@ -388,7 +388,12 @@ each version of your plugin runs. One the server owner has changed since (with
 when a player first opens one, never on join.
 
 A drawn dialog's switches, sliders and dropdowns are settings kept on the
-player, which your plugin reads with `dialogs.setting(player, "name")`. A
+player, which your plugin reads with `dialogs.setting(player, "name")`, and
+anything else reads through PlaceholderAPI as `%dialogengine_setting_<name>%`
+(the dialog's default until the player sets it). The other placeholders:
+`%dialogengine_open%`, `%dialogengine_dialog%` (the open dialog's id),
+`%dialogengine_value_<key>%`, `%dialogengine_can_open_<id>%`,
+`%dialogengine_dialogs%` and `%dialogengine_version%`. A
 list's rows are values like any other: `warps_3` is row three, `warps_3_note`
 its `note` field and `warps_count` how many there are.
 
