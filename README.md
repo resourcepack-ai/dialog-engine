@@ -353,6 +353,10 @@ dialogs.open(player, "myplugin:menu", Map.of("coins", "120"));
 dialogs.refresh(player);   // the player's current dialog, drawn again
 dialogs.close(player);
 
+// Change what an open dialog says, then draw it once.
+dialogs.set(player, "coins", "95");
+dialogs.refresh(player);
+
 // A new action: [myplugin:give] diamond 3
 dialogs.registerAction(this, "myplugin:give", (ctx, arg) -> {
     String[] p = arg.split(" ");
@@ -389,7 +393,9 @@ each version of your plugin runs. One the server owner has changed since (with
 when a player first opens one, never on join.
 
 A drawn dialog's switches, sliders and dropdowns are settings kept on the
-player, which your plugin reads with `dialogs.setting(player, "name")`, and
+player, which your plugin reads with `dialogs.setting(player, "name")` and
+sets with `dialogs.setSetting(player, "name", value)` (null clears it; no
+`DialogSettingChangeEvent`, which is for the player's own clicks), and
 anything else reads through PlaceholderAPI as `%dialogengine_setting_<name>%`
 (the dialog's default until the player sets it). The other placeholders:
 `%dialogengine_open%`, `%dialogengine_dialog%` (the open dialog's id),
@@ -397,6 +403,21 @@ anything else reads through PlaceholderAPI as `%dialogengine_setting_<name>%`
 `%dialogengine_dialogs%` and `%dialogengine_version%`. A
 list's rows are values like any other: `warps_3` is row three, `warps_3_note`
 its `note` field and `warps_count` how many there are.
+
+A drawn dialog's grid of item slots can show a container "from a plugin", by
+a name set in the editor. Register that name and the slots show what your
+inventory holds; if the grid lets items move, players move them between it and
+their own inventory:
+
+```java
+dialogs.registerContainer(this, "bank", new DialogContainer() {
+    public Inventory inventory(Player viewer) { return banks.of(viewer); }   // null: empty slots
+    public void changed(Player viewer) { banks.save(viewer); }
+});
+```
+
+`mayTake` and `mayPlace` refuse a move per slot, and `DialogSlotMoveEvent`
+still fires for every one, with the slot named `api.bank/0`.
 
 A drawn dialog's pieces fire `DialogClickEvent` too. A piece has no `id:`, so
 name it in its command: in the editor, **When clicked** set to **Run command**,
@@ -409,7 +430,7 @@ command with no brackets is run by the player, as on any dialog.
 
 | Event | |
 |---|---|
-| `DialogOpenEvent` | A dialog is about to be drawn. Cancellable; `values()` can be changed |
+| `DialogOpenEvent` | A dialog is about to be drawn. Cancellable; `getValues()` can be changed |
 | `DialogClickEvent` | A button was pressed, its inputs passed, its actions not yet run. Cancellable; `getButtonId()`, `getInputs()`, `getSettings()` (a drawn dialog's), `getValues()`, `getActions()` (changeable), `isDrawn()`, and `getContext()` to open, refresh or close |
 | `DialogCloseEvent` | A dialog left the screen. `getReason()`: `EXIT` (the exit button, or Escape, which presses it), `BUTTON`, `REPLACED` (`getNextDialogId()`), `SCREEN` (a container, the death screen, another world), `PLUGIN` or `QUIT`; `getButtonId()`, `getValues()`, `getSettings()` |
 | `DialogSettingChangeEvent` | A drawn dialog's switch, slider or dropdown is about to change a setting. Cancellable |

@@ -267,6 +267,45 @@ public final class DrawnDialogs {
         return variables().get(player, name);
     }
 
+    /** Sets a player's setting for the API, or clears it with a null value. */
+    public boolean setSetting(Player player, String name, String value) {
+        if (player == null || name == null) return false;
+        if (value == null) {
+            variables().clear(player, name);
+            return true;
+        }
+        return variables().set(player, name, value);
+    }
+
+    /**
+     * A plugin's container for the slots a drawing shows under
+     * {@code api.<name>}, or null to take it away. The API's type, handed to
+     * the runtime as its own.
+     */
+    public boolean container(String name, ai.resourcepack.dialogs.api.DialogContainer container) {
+        return slots().register(name, container == null ? null : new ai.resourcepack.dialogruntime.SlotContainer() {
+            @Override
+            public org.bukkit.inventory.Inventory inventory(Player viewer) {
+                return container.inventory(viewer);
+            }
+
+            @Override
+            public boolean mayTake(Player viewer, int slot, org.bukkit.inventory.ItemStack stack) {
+                return container.mayTake(viewer, slot, stack);
+            }
+
+            @Override
+            public boolean mayPlace(Player viewer, int slot, org.bukkit.inventory.ItemStack stack) {
+                return container.mayPlace(viewer, slot, stack);
+            }
+
+            @Override
+            public void changed(Player viewer) {
+                container.changed(viewer);
+            }
+        });
+    }
+
     /**
      * What a player's setting reads as: their own value, or, when they have
      * never set it, the default a loaded dialog shows for it (the first that

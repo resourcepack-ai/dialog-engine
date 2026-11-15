@@ -82,6 +82,8 @@ public final class Engine implements DialogEngineAPI {
     private final Map<String, Owned<ActionHandler>> customActions = new ConcurrentHashMap<>();
     private final List<Owned<Map.Entry<String, PlaceholderResolver>>> resolvers = new ArrayList<>();
     private final Map<String, Owned<ListProvider>> lists = new ConcurrentHashMap<>();
+    /** Whose each registered slot container is, by its name, so a plugin's go when it disables. */
+    private final Map<String, Plugin> containerOwners = new ConcurrentHashMap<>();
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
     private final Set<String> warned = ConcurrentHashMap.newKeySet();
     private final Map<String, String> jsonCache = new ConcurrentHashMap<>();
@@ -997,6 +999,33 @@ public final class Engine implements DialogEngineAPI {
     }
 
     @Override
+    public boolean setSetting(Player player, String name, String value) {
+        return drawn.setSetting(player, name, value);
+    }
+
+    @Override
+    public boolean registerContainer(Plugin owner, String name, ai.resourcepack.dialogs.api.DialogContainer container) {
+        if (owner == null || name == null || container == null) return false;
+        if (!drawn.container(name, container)) return false;
+        containerOwners.put(name, owner);
+        return true;
+    }
+
+    @Override
+    public boolean set(Player player, String key, String value) {
+        Session s = player == null || key == null ? null : sessions.get(player.getUniqueId());
+        if (s == null) return false;
+        if (value == null) {
+            s.values.remove(key);
+        } else {
+            s.values.put(key, value);
+        }
+        // A plugin's value, read as MiniMessage like one passed to open.
+        s.untrusted.remove(key);
+        return true;
+    }
+
+    @Override
     public void registerDialog(Plugin owner, String dialogId, ConfigurationSection definition) {
         String id = dialogId.toLowerCase(Locale.ROOT);
         if (!id.contains(":")) throw new IllegalArgumentException("a dialog id is namespace:name");
@@ -1030,6 +1059,11 @@ public final class Engine implements DialogEngineAPI {
                 | codeDialogs.values().removeIf(c -> c.owner() == owner);
         customActions.values().removeIf(o -> o.owner() == owner);
         lists.values().removeIf(o -> o.owner() == owner);
+        containerOwners.entrySet().removeIf(owned -> {
+            if (owned.getValue() != owner) return false;
+            drawn.container(owned.getKey(), null);
+            return true;
+        });
         synchronized (resolvers) {
             resolvers.removeIf(o -> o.owner() == owner);
         }

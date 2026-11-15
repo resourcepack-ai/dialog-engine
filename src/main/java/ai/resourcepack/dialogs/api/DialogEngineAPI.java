@@ -49,6 +49,22 @@ public interface DialogEngineAPI {
     /** The values the player's current dialog was drawn with: its placeholders, then what they typed. */
     Map<String, String> values(Player player);
 
+    /** Whether the player has one of Dialog Engine's dialogs open. */
+    default boolean isOpen(Player player) {
+        return current(player).isPresent();
+    }
+
+    /**
+     * Changes one value of the dialog a player has open, and draws nothing:
+     * set as many as you like, then {@link #refresh} once. A null value takes
+     * the key away. The value is read as MiniMessage, like one passed to
+     * {@link #open}, so anything a player wrote goes through {@link #escape}
+     * first.
+     *
+     * @return false when they have no dialog open
+     */
+    boolean set(Player player, String key, String value);
+
     /** Every dialog id the engine has. */
     Set<String> ids();
 
@@ -86,6 +102,34 @@ public interface DialogEngineAPI {
      * on the player. Empty when they have never set it.
      */
     Optional<String> setting(Player player, String name);
+
+    /**
+     * Sets a player's value for a drawn dialog's setting, as if they had
+     * clicked the control: any name, not only one a dialog binds, because your
+     * plugin is not the player. A null value clears it, and the dialog's
+     * default shows again. No {@code DialogSettingChangeEvent} is fired, which
+     * is for a player's own clicks.
+     *
+     * <p>Names are lower-case letters, digits and {@code _}, starting with a
+     * letter, up to 32; values are letters, digits and {@code _ . -}, up to
+     * 32; a player keeps at most 64. Nothing is drawn again: call
+     * {@link #refresh} if they are looking at the dialog.
+     *
+     * @return false when the name or value is not one a setting can be, or the
+     *         player already has as many as they can keep
+     */
+    boolean setSetting(Player player, String name, String value);
+
+    /**
+     * Registers the container a drawn dialog's item slots show under
+     * {@code api.<name>}: the grid set to a container "from a plugin" in the
+     * editor. See {@link DialogContainer}. Registering a name again replaces
+     * it; yours are dropped when your plugin disables.
+     *
+     * @param name lower-case letters, digits and {@code _}, as typed in the editor
+     * @return false when the name is not one a container can have
+     */
+    boolean registerContainer(Plugin owner, String name, DialogContainer container);
 
     /** Registers one dialog from a configuration section (handy for dialogs built in code). Replaced on reload only if registered again. */
     void registerDialog(Plugin owner, String dialogId, ConfigurationSection definition);

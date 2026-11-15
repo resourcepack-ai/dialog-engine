@@ -37,6 +37,11 @@ public final class DialogOpenEvent extends PlayerEvent implements Cancellable {
         return values;
     }
 
+    /** {@link #values()}, under the name every other event here gives it. */
+    public Map<String, String> getValues() {
+        return values;
+    }
+
     /** True when this is the same dialog drawn again (refresh, page, a failed check), not a new one. */
     public boolean isReopened() {
         return reopened;
