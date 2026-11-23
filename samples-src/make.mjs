@@ -19,7 +19,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // The `yaml` package: installed here (npm install yaml), or else Studio's copy
 // when a Studio checkout sits beside this directory.
 const YAML = (() => {
-  for (const from of [import.meta.url, join(here, "../../studio/package.json")]) {
+  for (const from of [import.meta.url, join(here, "../../studio-engine/package.json")]) {
     try {
       return createRequire(from)("yaml");
     } catch {}
