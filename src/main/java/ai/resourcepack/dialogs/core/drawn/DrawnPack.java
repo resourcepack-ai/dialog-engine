@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.drawn;
 
+import ai.resourcepack.dialogruntime.DialogHiddenButton;
 import ai.resourcepack.dialogruntime.DialogShaderRevision;
 import ai.resourcepack.common.host.PackUploader;
 import ai.resourcepack.common.scheduler.Tasks;
@@ -92,6 +93,8 @@ public final class DrawnPack {
     private boolean merged;
     /** Where the last build read the drawings from, for a rebuild when the other plugins' packs change. */
     private File lastRoot;
+    /** Whether the last build was asked for the hidden button's shader, for the same rebuild. */
+    private boolean lastHiddenButtons;
 
     public DrawnPack(Engine engine) {
         this.engine = engine;
@@ -138,7 +141,7 @@ public final class DrawnPack {
     public void watchLater(long delayTicks) {
         shaders().scanLater(delayTicks, changed -> {
             if (changed && lastRoot != null) {
-                build(lastRoot);
+                build(lastRoot, lastHiddenButtons);
                 sendAll();
             }
         });
@@ -159,9 +162,14 @@ public final class DrawnPack {
         return c != null ? c : engine.plugin().getConfig().createSection("pack");
     }
 
-    /** Builds the zip from every drawn dialog's {@code pack/} folder. Null when there is nothing to draw. */
-    public void build(File drawnRoot) {
+    /**
+     * Builds the zip from every drawn dialog's {@code pack/} folder, and, when
+     * {@code hiddenButtons}, the shader that hides a YAML dialog's
+     * {@code hide-button} ({@link DialogHiddenButton}). Null when there is nothing to draw.
+     */
+    public void build(File drawnRoot, boolean hiddenButtons) {
         lastRoot = drawnRoot;
+        lastHiddenButtons = hiddenButtons;
         // Before anything is built: another plugin's text shader is merged into
         // this pack, so a player is sent this one pack and nothing after it.
         shaders().scanNow();
@@ -215,6 +223,32 @@ public final class DrawnPack {
                     }
                 }
             }
+        }
+        if (hiddenButtons) {
+            // Studio's own copy, at the paths a drawing's pack carries it, so the
+            // newer revision stays whichever came first (combine).
+            for (DialogHiddenButton.Overlay overlay : DialogHiddenButton.overlays()) {
+                JsonObject entry = new JsonObject();
+                JsonObject range = new JsonObject();
+                range.addProperty("min_inclusive", overlay.minFormat());
+                range.addProperty("max_inclusive", overlay.maxFormat());
+                entry.add("formats", range);
+                entry.addProperty("min_format", overlay.minFormat());
+                entry.addProperty("max_format", overlay.maxFormat());
+                entry.addProperty("directory", overlay.directory());
+                boolean declared = false;
+                for (JsonElement e : overlays) {
+                    declared |= e.isJsonObject() && e.getAsJsonObject().has("directory")
+                            && overlay.directory().equals(e.getAsJsonObject().get("directory").getAsString());
+                }
+                if (!declared) overlays.add(entry);
+                min = Math.min(min, overlay.minFormat());
+                max = Math.max(max, overlay.maxFormat());
+            }
+            for (var file : DialogHiddenButton.files().entrySet()) {
+                files.merge(file.getKey(), file.getValue(), (had, mine) -> combine(file.getKey(), had, mine));
+            }
+            format = Math.max(format, MIN_FORMAT);
         }
         ownDialogs = own;
         if (files.isEmpty()) {

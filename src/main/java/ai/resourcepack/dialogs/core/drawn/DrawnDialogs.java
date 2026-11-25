@@ -543,7 +543,7 @@ public final class DrawnDialogs {
         }
         DialogDef def = new DialogDef(id, ns, "drawn/" + id.replace(':', '/') + "/" + DrawnFiles.SOURCE, id, null,
                 Defs.Type.MULTI_ACTION, 1, true, false, Defs.After.NONE, List.of(), List.of(), List.of(), null,
-                Map.of(), command, List.of(), permission, List.of(), null, null, Map.of(), quickAction(spec, id));
+                Map.of(), command, List.of(), permission, List.of(), null, null, Map.of(), quickAction(spec, id), false);
         // Once every page is rewritten: a sound's command is found among the
         // actions all of them made.
         Map<String, PageSounds> sounds = new LinkedHashMap<>();

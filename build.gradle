@@ -75,7 +75,7 @@ dependencies {
     // (Dialogs V2, 2026-11-13). It used to be copied out of a checkout of RP
     // Engine and patched by text, with no version pinned; it is a library now,
     // built from source beside this directory (settings.gradle).
-    implementation 'ai.resourcepack:dialog-runtime:0.1.0'
+    implementation 'ai.resourcepack:dialog-runtime:0.2.0'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

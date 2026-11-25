@@ -10,6 +10,7 @@ import ai.resourcepack.dialogs.core.yaml.Defs.InputDef;
 import ai.resourcepack.dialogs.core.yaml.Defs.InputKind;
 import ai.resourcepack.dialogs.core.yaml.Defs.OptionDef;
 import ai.resourcepack.dialogs.core.yaml.Defs.Type;
+import ai.resourcepack.dialogruntime.DialogHiddenButton;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -200,7 +201,32 @@ public final class Loader {
                 ifMissing,
                 json,
                 Collections.unmodifiableMap(defaults),
-                quickAction(s, source, id));
+                quickAction(s, source, id),
+                hideButton(s, type, buttons, exit, json, source, id));
+    }
+
+    /**
+     * {@code hide-button: true}: a notice's one button, there but not seen
+     * (see Renderer). Only a notice's, because the shader knows the button by
+     * where it sits, alone in the middle of the footer; anything with more is
+     * said and shown as written.
+     */
+    private boolean hideButton(ConfigurationSection s, Type type, List<ButtonDef> buttons, ButtonDef exit, String json,
+                               String source, String id) {
+        if (!s.getBoolean("hide-button", false)) return false;
+        if (json != null) {
+            problems.add(source + ": " + id + " hide-button does nothing on a json: dialog, whose buttons are the file's;"
+                    + " give the button an empty label and a width of " + DialogHiddenButton.WIDTH + " there instead");
+            return false;
+        }
+        int count = buttons.size() + (exit != null ? 1 : 0);
+        if (type == Type.LINKS || type == Type.CONFIRMATION || type == Type.MULTI_ACTION || count > 1
+                || buttons.stream().anyMatch(b -> b.forEach() != null)) {
+            problems.add(source + ": " + id + " hide-button hides a notice's one button at the bottom, and this dialog"
+                    + " has more than one, so they all show. Keep one button (or none).");
+            return false;
+        }
+        return true;
     }
 
     /**

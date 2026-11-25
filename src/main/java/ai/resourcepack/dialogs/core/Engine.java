@@ -189,7 +189,7 @@ public final class Engine implements DialogEngineAPI {
         commands.sync(dialogs.values());
         drawn.load();
         for (String p : drawn.problems) plugin.getLogger().warning(p);
-        drawnPack.build(drawn.folder());
+        drawnPack.build(drawn.folder(), dialogs.values().stream().anyMatch(DialogDef::hideButton));
         drawn.redrawStale();
         List<DialogDef> all = new ArrayList<>(dialogs.values());
         for (String id : drawn.ids()) drawn.get(id).ifPresent(d -> all.add(d.def()));
@@ -608,24 +608,7 @@ public final class Engine implements DialogEngineAPI {
         if (!player.getUniqueId().equals(session.viewer)) return false;
         if (drawn.has(session.dialogId)) {
             if (!player.isOnline()) return false;
-            // Ours is under another plugin of ours' pack (see buried): sent again first, so the dialog draws with our shaders.
-            // Sent again under the same id, not taken off first: the client puts it on top in one reload (taking it off
-            // first was two, the first without it).
-            boolean raise = !drawnPack.needs(player) && buried.remove(player.getUniqueId());
-            if (raise || drawnPack.needs(player)) {
-                // Drawn before the pack reaches them, it would be a box of missing glyphs: send it, and open this once it has loaded.
-                // Not sent (the console says why): shown anyway, since its buttons still work.
-                waitingForPack.put(player.getUniqueId(), () -> {
-                    if (player.isOnline()) show(player, session, reopened);
-                });
-                if (raise) raising.add(player.getUniqueId());
-                if (drawnPack.send(player)) {
-                    tell(player, message("pack-loading", "<gray>Loading this menu's resource pack..."));
-                    return true;
-                }
-                raising.remove(player.getUniqueId());
-                waitingForPack.remove(player.getUniqueId());
-            }
+            if (awaitPack(player, session, reopened)) return true;
             DialogOpenEvent event = new DialogOpenEvent(player, session.dialogId, session.values, reopened);
             Bukkit.getPluginManager().callEvent(event);
             if (event.isCancelled() || !drawn.show(player, session, reopened)) return false;
@@ -640,6 +623,8 @@ public final class Engine implements DialogEngineAPI {
         }
         DialogDef def = dialogs.get(session.dialogId);
         if (def == null || !player.isOnline()) return false;
+        // Its button is hidden by the drawn pack's sprite shader: without the pack it shows as a sliver.
+        if (def.hideButton() && awaitPack(player, session, reopened)) return true;
         def.defaults().forEach(session.values::putIfAbsent);
         DialogOpenEvent event = new DialogOpenEvent(player, def.id(), session.values, reopened);
         Bukkit.getPluginManager().callEvent(event);
@@ -672,6 +657,32 @@ public final class Engine implements DialogEngineAPI {
             Platform.send(player, Text.MM.deserialize(message("broken", "<red>That dialog could not be shown. The console says why.")));
             return false;
         }
+    }
+
+    /**
+     * Sends the drawn pack first when the player needs it for this dialog, and
+     * shows it once it has loaded; true when it is waiting for that. Shown at
+     * once (false) when the pack could not be sent: the console says why, and
+     * its buttons still work.
+     */
+    private boolean awaitPack(Player player, Session session, boolean reopened) {
+        // Ours is under another plugin of ours' pack (see buried): sent again first, so the dialog draws with our shaders.
+        // Sent again under the same id, not taken off first: the client puts it on top in one reload (taking it off
+        // first was two, the first without it).
+        boolean raise = !drawnPack.needs(player) && buried.remove(player.getUniqueId());
+        if (!raise && !drawnPack.needs(player)) return false;
+        // Drawn before the pack reaches them, it would be a box of missing glyphs: send it, and open this once it has loaded.
+        waitingForPack.put(player.getUniqueId(), () -> {
+            if (player.isOnline()) show(player, session, reopened);
+        });
+        if (raise) raising.add(player.getUniqueId());
+        if (drawnPack.send(player)) {
+            tell(player, message("pack-loading", "<gray>Loading this menu's resource pack..."));
+            return true;
+        }
+        raising.remove(player.getUniqueId());
+        waitingForPack.remove(player.getUniqueId());
+        return false;
     }
 
     private void showJson(Player player, DialogDef def, Session session) {

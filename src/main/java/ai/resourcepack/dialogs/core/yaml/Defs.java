@@ -77,7 +77,11 @@ public final class Defs {
             String ifMissing,
             String json,
             Map<String, String> defaults,
-            QuickAction quick) {
+            QuickAction quick,
+            // hide-button: the one button at the bottom of a notice, sent too
+            // narrow to see and thrown away by the drawn pack's sprite shader
+            // (DialogHiddenButton). Still there: Escape and its two pixels press it.
+            boolean hideButton) {
     }
 
     /**

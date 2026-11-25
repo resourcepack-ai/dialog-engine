@@ -1,5 +1,6 @@
 package ai.resourcepack.dialogs.core.yaml;
 
+import ai.resourcepack.dialogruntime.DialogHiddenButton;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.Clicks;
@@ -166,6 +167,12 @@ public final class Renderer {
         if (t == Type.NOTICE || buttons.isEmpty() || (t == Type.AUTO && buttons.size() == 1 && exit == null)) {
             JsonObject only = !buttons.isEmpty() ? buttons.get(0) : exit;
             out.addProperty("type", "minecraft:notice");
+            if (def.hideButton()) {
+                // Too narrow to see, with no words, doing what it would have:
+                // the drawn pack's sprite shader throws it away (DialogHiddenButton).
+                out.add("action", DialogHiddenButton.button(only != null && only.get("action") instanceof JsonObject a ? a : null));
+                return;
+            }
             if (only != null) out.add("action", only);
             return;
         }
