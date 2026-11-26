@@ -124,4 +124,76 @@ class TextTest {
         assertFalse(Text.safe("minecraft:diamond"));
         assertFalse(Text.safe("a b"));
     }
+
+    private static String plain(net.kyori.adventure.text.Component c) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(c);
+    }
+
+    @Test
+    void anAuthorsUnicodeEscapeIsItsCharacter() {
+        Scope s = scope(Map.of());
+        assertEquals("\u2764 hi", Text.fill("\\u2764 hi", s, Text.Mode.TEXT));
+        assertEquals("\uE001", Text.fill("\\uE001", s, Text.Mode.TEXT));
+        assertEquals("\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00", Text.fill("\\U0001F600\\u{1F600}\\uD83D\\uDE00", s, Text.Mode.TEXT));
+        assertEquals("<red>\u2764</red>", Text.fill("<red>\\u2764</red>", s, Text.Mode.TEXT));
+        // Escaped, not hex, or no character at all: as written.
+        assertEquals("\\\\u2764", Text.fill("\\\\u2764", s, Text.Mode.TEXT));
+        assertEquals("\\u27G4 \\u{110000}", Text.fill("\\u27G4 \\u{110000}", s, Text.Mode.TEXT));
+        // Only in text: a command is the game's to read.
+        assertEquals("say \\u2764", Text.fill("say \\u2764", s, Text.Mode.COMMAND));
+    }
+
+    @Test
+    void aTypedEscapeStaysTyped() {
+        assertEquals("\\u2764", Text.fill("{typed}", scope(Map.of("typed", "\\u2764")), Text.Mode.TEXT));
+    }
+
+    @Test
+    void wholeJsonIsAComponentAndAnythingElseIsMiniMessage() {
+        for (String json : new String[] {"{\"text\":\"a\"}", "  { \"text\": \"a\" }  ", "[{\"text\":\"a\"},\"b\"]", "[\"a\"]"}) {
+            assertTrue(Text.isJson(json), json);
+        }
+        for (String mini : new String[] {"[VIP] Welcome", "{player} joined", "{a?x:{\"b\"}}x", "<red>{\"text\"}", "[]", "{}", "", "a"}) {
+            assertFalse(Text.isJson(mini), mini);
+        }
+    }
+
+    @Test
+    void aJsonComponentKeepsItsFontAndSymbols() {
+        var c = Text.component("{\"text\":\"\\uE001 \u2764\",\"font\":\"myicons:icons\",\"color\":\"red\"}", scope(Map.of()));
+        assertEquals("\uE001 \u2764", plain(c));
+        assertEquals("myicons:icons", String.valueOf(c.font()));
+        assertEquals(net.kyori.adventure.text.format.NamedTextColor.RED, c.color());
+        var arr = Text.component("[\"\",{\"text\":\"\\u2605\",\"color\":\"gold\"},{\"text\":\" Shop\"}]", scope(Map.of()));
+        assertEquals("\u2605 Shop", plain(arr));
+    }
+
+    @Test
+    void aJsonComponentIsFilledAfterItIsParsed() {
+        Scope s = scope(Map.of("player", "Steve", "typed", "\"},{\"text\":\"<red>x", "typed_name", "Alex"));
+        var c = Text.component("{\"text\":\"Hi {player} {typed}\",\"click_event\":{\"action\":\"run_command\",\"command\":\"/msg {typed} hi\"}}", s);
+        // A typed value is words, never structure or a tag.
+        assertEquals("Hi Steve \"},{\"text\":\"<red>x", plain(c));
+        // ...and in a click it is left as written unless it is a name.
+        assertEquals("/msg {typed} hi", c.clickEvent().value());
+        var named = Text.component("{\"text\":\"x\",\"click_event\":{\"action\":\"run_command\",\"command\":\"/msg {typed_name} hi\"}}", s);
+        assertEquals("/msg Alex hi", named.clickEvent().value());
+    }
+
+    @Test
+    void brokenJsonIsMiniMessageAndSaysWhy() {
+        String broken = "{\"text\":\"a\",}x}";
+        assertTrue(Text.isJson(broken));
+        assertTrue(Text.jsonProblem(broken) != null);
+        assertEquals(broken, plain(Text.component(broken, scope(Map.of()))));
+        assertEquals(null, Text.jsonProblem("{\"text\":\"a\"}"));
+        assertEquals(null, Text.jsonProblem("<red>plain"));
+    }
+
+    @Test
+    void plainWordsOfEither() {
+        Scope s = scope(Map.of("n", "5"));
+        assertEquals("Amount 5", Text.plain("<gold>Amount</gold> {n}", s));
+        assertEquals("Amount 5", Text.plain("{\"text\":\"Amount {n}\",\"color\":\"gold\"}", s));
+    }
 }

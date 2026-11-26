@@ -98,7 +98,18 @@ mistakes.
 Every folder in `dialogs/` is a namespace, and every key in a `.yml` file in
 it is a dialog: `welcome` in `dialogs/samples/menus.yml` is
 `samples:welcome`. Files sitting directly in `dialogs/` are in the namespace
-`server`. Text is [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
+`server`. Text is [MiniMessage](https://docs.advntr.dev/minimessage/format.html),
+in which `❤`, `\U0001F600` and `\u{1F600}` are the character they name (a
+symbol, or a resource pack's glyph such as ``); leave such a text
+unquoted or in single quotes, since in double quotes YAML reads the escape
+itself and refuses `\u{...}`. Any text
+can instead be the game's own JSON text component, the format `/tellraw` and
+Paper use, when the whole of it is one:
+`'{"text":"","font":"myicons:icons"}'` or
+`'[{"text":"★ ","color":"gold"},"Shop"]'`. Placeholders work inside its
+strings; in a click's command, or any string that is not words, a value a
+player typed goes in only if it is a name. JSON the game cannot read is
+reported by `/de reload` and shown as written.
 
 ```yaml
 shop:

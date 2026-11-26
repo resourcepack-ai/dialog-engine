@@ -1,6 +1,7 @@
 package ai.resourcepack.dialogs.core.yaml;
 
 import ai.resourcepack.dialogs.core.click.Clicks;
+import ai.resourcepack.dialogs.core.placeholder.Text;
 import ai.resourcepack.dialogs.core.yaml.Defs.BodyDef;
 import ai.resourcepack.dialogs.core.yaml.Defs.BodyKind;
 import ai.resourcepack.dialogs.core.yaml.Defs.ButtonDef;
@@ -71,10 +72,48 @@ public final class Loader {
                     String id = namespace + ":" + key.toLowerCase(Locale.ROOT);
                     DialogDef def = parse(id, namespace, where, section, file.getParentFile());
                     if (def == null) continue;
+                    checkJson(where, def);
                     if (out.containsKey(id)) problems.add(where + ": " + id + " is defined twice; the later one wins");
                     out.put(id, def);
                 }
             }
+        }
+    }
+
+    /** The action tags whose argument is text a player reads, which may be a JSON component. */
+    private static final Pattern TEXT_ACTION = Pattern.compile("^\\s*\\[(message|msg|broadcast|actionbar|title)]\\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /**
+     * A text written as a JSON component the game cannot read is shown as
+     * MiniMessage, which prints the JSON as written; say so at load rather than
+     * leave the author to find it on screen.
+     */
+    private void checkJson(String source, DialogDef def) {
+        List<String> texts = new ArrayList<>();
+        texts.add(def.title());
+        texts.add(def.externalTitle());
+        for (BodyDef b : def.body()) {
+            texts.add(b.text());
+            texts.add(b.name());
+            texts.add(b.description());
+            if (b.lore() != null) texts.addAll(b.lore());
+        }
+        for (InputDef in : def.inputs()) texts.add(in.label());
+        List<ButtonDef> buttons = new ArrayList<>(def.buttons());
+        if (def.exit() != null) buttons.add(def.exit());
+        for (ButtonDef b : buttons) {
+            texts.add(b.label());
+            texts.add(b.tooltip());
+            if (b.actions() == null) continue;
+            for (String line : b.actions()) {
+                var m = line == null ? null : TEXT_ACTION.matcher(line);
+                if (m != null && m.matches()) texts.add(m.group(2).trim());
+            }
+        }
+        for (String text : texts) {
+            String problem = Text.jsonProblem(text);
+            if (problem != null) problems.add(source + ": " + def.id() + " has text that looks like a JSON component but is not one ("
+                    + problem + "); it is shown as MiniMessage: " + (text.length() > 60 ? text.substring(0, 60) + "..." : text));
         }
     }
 

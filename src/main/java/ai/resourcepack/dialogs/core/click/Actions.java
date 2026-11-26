@@ -204,7 +204,7 @@ public final class Actions {
         for (Defs.InputDef in : ctx.def.inputs()) {
             if (in.key().equals(key)) input = in;
         }
-        String label = input == null ? "" : Text.MM.stripTags(Text.fill(input.label(), ctx.scope(), Text.Mode.TEXT));
+        String label = input == null ? "" : Text.plain(input.label(), ctx.scope());
         if (label.isBlank()) label = key;
         String message = engine.message("unsafe-value", "{label} can only have letters, numbers, _ . and - in it.")
                 .replace("{label}", label);
@@ -232,6 +232,11 @@ public final class Actions {
         Platform.send(ctx.player, Text.MM.deserialize(engine.message("command-failed", "<red>That didn't work, so nothing more was done.")));
     }
 
+    /** A text action's words: MiniMessage as filled, or the JSON component the line holds, filled after it is parsed. */
+    private static Component words(ClickCtx ctx, String arg, String rawArg) {
+        return Text.isJson(rawArg) ? Text.component(rawArg, ctx.scope()) : Text.MM.deserialize(arg);
+    }
+
     private boolean builtIn(ClickCtx ctx, String tag, String arg, String rawArg) {
         Player p = ctx.player;
         switch (tag) {
@@ -241,12 +246,13 @@ public final class Actions {
             case "console" -> {
                 if (!arg.isEmpty() && !Bukkit.dispatchCommand(Bukkit.getConsoleSender(), stripSlash(arg))) failed(ctx, tag, arg);
             }
-            case "message", "msg" -> Platform.send(p, Text.MM.deserialize(arg));
-            case "broadcast" -> Platform.broadcast(Text.MM.deserialize(arg));
-            case "actionbar" -> Platform.actionBar(p, Text.MM.deserialize(arg));
+            case "message", "msg" -> Platform.send(p, words(ctx, arg, rawArg));
+            case "broadcast" -> Platform.broadcast(words(ctx, arg, rawArg));
+            case "actionbar" -> Platform.actionBar(p, words(ctx, arg, rawArg));
             case "title" -> {
-                int bar = arg.indexOf('|');
-                Component title = Text.MM.deserialize(bar < 0 ? arg : arg.substring(0, bar).trim());
+                // A JSON component is the title alone: a | in it is the JSON's.
+                int bar = Text.isJson(rawArg) ? -1 : arg.indexOf('|');
+                Component title = bar < 0 ? words(ctx, arg, rawArg) : Text.MM.deserialize(arg.substring(0, bar).trim());
                 Component sub = bar < 0 ? Component.empty() : Text.MM.deserialize(arg.substring(bar + 1).trim());
                 Platform.title(p, title, sub);
             }

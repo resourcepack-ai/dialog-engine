@@ -828,7 +828,7 @@ public final class Engine implements DialogEngineAPI {
         if (in.kind() != InputKind.TEXT) return null;
         String v = value == null ? "" : value;
         Scope scope = new Scope(this, player, def.id(), values, untrusted, null, null);
-        String label = Text.MM.stripTags(Text.fill(in.label(), scope, Text.Mode.TEXT));
+        String label = Text.plain(in.label(), scope);
         if (label.isBlank()) label = in.key();
         String custom = in.error();
         if (in.required() && v.isBlank()) {

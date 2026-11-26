@@ -23,6 +23,10 @@ server and run `/de reload`.
 ## Rules that save a round trip
 
 - Text is MiniMessage (`<gold>`, `<bold>`, `<#3670f8>`), never `&` codes.
+  `❤` (or `\U0001F600`, `\u{1F600}`) is that character, for symbols and a
+  resource pack's glyphs. A text that is wholly a JSON text component
+  (`'{"text":"","font":"myicons:icons"}'`, the `/tellraw` format) is read
+  as one instead; put it in single quotes.
 - Quote any string that starts with `<`, `[`, `{`, `%`, `*` or contains `: `.
 - Actions run in order. A line with no `[tag]` is a command the PLAYER runs,
   with the player's permissions; use `[console]` for anything staff-only, and

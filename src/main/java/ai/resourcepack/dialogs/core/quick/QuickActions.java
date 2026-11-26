@@ -259,6 +259,8 @@ public final class QuickActions {
     private static JsonElement label(DialogDef def) {
         String raw = def.quick().label() != null ? def.quick().label()
                 : def.externalTitle() != null ? def.externalTitle() : def.title();
+        // A JSON component as written: taking its braces out would leave no JSON.
+        if (Text.isJson(raw)) return Text.json(Text.parse(raw));
         String plain = PLACEHOLDER.matcher(raw == null ? "" : raw).replaceAll("").replaceAll("\\s{2,}", " ").trim();
         if (Platform.plain(Text.MM.deserialize(plain)).isBlank()) plain = Text.MM.escapeTags(def.id());
         return Text.json(Text.MM.deserialize(plain));
