@@ -113,6 +113,11 @@ pack:
   # Or host the pack yourself and put its URL here (/de pack writes it out).
   url: ""
   prompt: "<gray>This server's menus are drawn with a small resource pack."
+  # A drawn dialog showing a player's inventory draws other plugins' custom
+  # items (ItemsAdder, Nexo, Oraxen...) as themselves: their packs are read
+  # from their folders, and any pack you put in item-packs/. False shows them
+  # as a question mark.
+  item-pictures: true
 
 # A drawn dialog's live player heads replace the game's text shader, and so do
 # some HUD plugins' packs (BetterHud's). A player's game keeps only one copy, so

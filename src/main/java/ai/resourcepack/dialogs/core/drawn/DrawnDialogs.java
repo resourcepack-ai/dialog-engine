@@ -853,7 +853,8 @@ public final class DrawnDialogs {
         if (DialogItems.perPlayer(json)) {
             String cid = slotKey(d.id);
             slots().shown(player, cid, before != null && before.drawn.equals(d.id));
-            json = DialogItems.fill(json, slots().reader(player), slots().held(player, cid).orElse(null), d.itemIcons);
+            json = DialogItems.fill(json, slots().reader(player), slots().held(player, cid).orElse(null), d.itemIcons,
+                    engine.drawnPack.pictures());
         }
         boolean permitted = d.permission == null || player.hasPermission(d.permission);
         lastShown.put(player.getUniqueId(), new Shown(d.id, page, session, nonce, permitted, System.currentTimeMillis(), true, json, rows));

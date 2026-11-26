@@ -15,6 +15,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -36,7 +37,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -95,6 +98,10 @@ public final class DrawnPack {
     private File lastRoot;
     /** Whether the last build was asked for the hidden button's shader, for the same rebuild. */
     private boolean lastHiddenButtons;
+    /** Other plugins' item pictures, for a drawing's live item slots. See {@link ItemPictures}. */
+    private final ItemPictures pictures = new ItemPictures();
+    /** What the packs read for them were when last built, so a change to one builds again. */
+    private String picturesFingerprint = "";
 
     public DrawnPack(Engine engine) {
         this.engine = engine;
@@ -140,11 +147,53 @@ public final class DrawnPack {
      */
     public void watchLater(long delayTicks) {
         shaders().scanLater(delayTicks, changed -> {
-            if (changed && lastRoot != null) {
+            // A plugin that writes its pack after enabling (ItemsAdder's zip) changes the pictures too.
+            boolean items = lastRoot != null && itemPicturesOn()
+                    && !ItemPictures.fingerprint(itemPacks()).equals(picturesFingerprint);
+            if ((changed || items) && lastRoot != null) {
                 build(lastRoot, lastHiddenButtons);
                 sendAll();
             }
         });
+    }
+
+    /** Where a live item slot finds the picture of another plugin's item. */
+    public ItemPictures pictures() {
+        return pictures;
+    }
+
+    private boolean itemPicturesOn() {
+        return cfg().getBoolean("item-pictures", true);
+    }
+
+    /** Every resource pack on the server to read items from: {@code item-packs/}, then every other plugin's folder. */
+    private List<Path> itemPacks() {
+        List<Path> others = new ArrayList<>();
+        for (Plugin other : engine.plugin().getServer().getPluginManager().getPlugins()) {
+            if (other != engine.plugin()) others.add(other.getDataFolder().toPath());
+        }
+        return ItemPictures.locate(engine.plugin().getDataFolder().toPath(), others);
+    }
+
+    /** Draws other plugins' items into the icon fonts, when a drawing shows a player's items. */
+    private void addItemPictures(Map<String, byte[]> files) {
+        if (!itemPicturesOn() || files.keySet().stream().noneMatch(n -> ItemPictures.ICON_FONT.matcher(n).matches())) {
+            pictures.build(Map.of(), List.of(), engine.plugin().getLogger());
+            picturesFingerprint = "";
+            return;
+        }
+        List<Path> packs = itemPacks();
+        picturesFingerprint = ItemPictures.fingerprint(packs);
+        try {
+            ItemPictures.Built built = pictures.build(files, packs, engine.plugin().getLogger());
+            if (built.found() > 0) {
+                engine.plugin().getLogger().info("Drawn dialogs show " + built.drawn() + " items from other packs in item slots"
+                        + (built.drawn() < built.found() ? " (" + (built.found() - built.drawn()) + " more did not fit)" : "")
+                        + ", read from " + built.packs().size() + " pack" + (built.packs().size() == 1 ? "" : "s") + ".");
+            }
+        } catch (RuntimeException | LinkageError e) {
+            engine.plugin().getLogger().warning("Could not draw other plugins' items for drawn dialogs: " + e);
+        }
     }
 
     /** Whether the pack carries another plugin's text shader merged in, so must reach a player after theirs. */
@@ -251,6 +300,7 @@ public final class DrawnPack {
             format = Math.max(format, MIN_FORMAT);
         }
         ownDialogs = own;
+        addItemPictures(files);
         if (files.isEmpty()) {
             zip = null;
             sha1 = null;
