@@ -1,6 +1,7 @@
 package ai.resourcepack.dialogs.core.yaml;
 
 import ai.resourcepack.dialogruntime.DialogHiddenButton;
+import ai.resourcepack.dialogruntime.DialogPackets;
 import ai.resourcepack.dialogs.core.Engine;
 import ai.resourcepack.dialogs.core.Session;
 import ai.resourcepack.dialogs.core.click.Clicks;
@@ -26,6 +27,9 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -75,7 +79,8 @@ public final class Renderer {
         for (BodyDef b : def.body()) {
             for (Scope s : expand(b.forEach(), scope, lists)) {
                 if (!Conditions.test(b.condition(), s)) continue;
-                body.add(body(b, s));
+                JsonObject built = body(b, s);
+                if (built != null) body.add(built);
             }
         }
 
@@ -246,13 +251,16 @@ public final class Renderer {
         return o;
     }
 
+    /** A body entry as the game reads it, or null when it is left out (a plugin's item that answered none). */
     private JsonObject body(BodyDef b, Scope s) {
         if (b.kind() == BodyKind.TEXT) {
             return plain(Text.json(b.text(), s), b.width());
         }
+        JsonObject stack = item(b, s);
+        if (stack == null) return null;
         JsonObject item = new JsonObject();
         item.addProperty("type", "minecraft:item");
-        item.add("item", item(b, s));
+        item.add("item", stack);
         if (b.description() != null) {
             JsonObject d = new JsonObject();
             d.add("contents", Text.json(b.description(), s));
@@ -266,15 +274,129 @@ public final class Renderer {
         return item;
     }
 
-    /** An item stack as the game writes one: id, count and the components a body item can carry. */
+    /** What {@code item:} starts with to name an item a plugin hands over ({@link Engine#registerItem}). */
+    static final String API_ITEM = "api.";
+
+    /** Whether a plugin's item can be registered under this name. */
+    public static boolean isItemName(String name) {
+        return name != null && name.matches("[a-z0-9_]{1,32}");
+    }
+
+    /**
+     * An item stack as the game writes one: id, count and the components a body
+     * item can carry. Null when the entry is left out.
+     */
     private JsonObject item(BodyDef b, Scope s) {
-        String raw = Text.fill(b.item(), s, Text.Mode.RAW).trim().toLowerCase(Locale.ROOT);
+        String filled = Text.fill(b.item(), s, Text.Mode.RAW).trim();
+        if (filled.regionMatches(true, 0, API_ITEM, 0, API_ITEM.length())) {
+            return provided(b, s, filled.substring(API_ITEM.length()));
+        }
+        String raw = filled.toLowerCase(Locale.ROOT);
         Material material = Material.matchMaterial(raw);
         if (material == null || !material.isItem() || material.isAir()) material = Material.PAPER;
         JsonObject stack = new JsonObject();
         stack.addProperty("id", material.getKey().toString());
-        stack.addProperty("count", Math.max(1, Math.min(99, b.amount())));
+        stack.addProperty("count", Math.max(1, Math.min(99, b.amount() > 0 ? b.amount() : 1)));
         JsonObject components = new JsonObject();
+        written(b, s, components);
+        if (b.head() != null && material == Material.PLAYER_HEAD) {
+            JsonObject profile = profile(Text.fill(b.head(), s, Text.Mode.RAW).trim());
+            if (profile != null) components.add("minecraft:profile", profile);
+        }
+        if (!components.isEmpty()) stack.add("components", components);
+        return stack;
+    }
+
+    /**
+     * {@code item: api.<name>[:<argument>]}: the stack a plugin's provider
+     * makes, with what the entry writes put over it. Null (the entry left out)
+     * when the provider answers none, or no plugin provides the name.
+     */
+    private JsonObject provided(BodyDef b, Scope s, String rest) {
+        int colon = rest.indexOf(':');
+        String name = (colon < 0 ? rest : rest.substring(0, colon)).trim().toLowerCase(Locale.ROOT);
+        String argument = colon < 0 ? "" : rest.substring(colon + 1).trim();
+        if (!engine.hasItem(name)) {
+            engine.warnOnce(s.dialogId + " shows item " + API_ITEM + name + ", which no plugin provides; it is left out");
+            return null;
+        }
+        ItemStack provided = engine.providedItem(name, argument, s);
+        if (provided == null || !provided.getType().isItem()) return null;
+        return overlaid(stackJson(provided), b, s);
+    }
+
+    /** A plugin's stack with the entry's own name, lore, model, custom model data, glint and amount put over it. */
+    static JsonObject overlaid(JsonObject stack, BodyDef b, Scope s) {
+        JsonObject components = stack.has("components") && stack.get("components").isJsonObject()
+                ? stack.getAsJsonObject("components") : new JsonObject();
+        written(b, s, components);
+        if (!components.isEmpty()) stack.add("components", components);
+        int count = b.amount() > 0 ? b.amount()
+                : stack.has("count") && stack.get("count").isJsonPrimitive() ? stack.get("count").getAsInt() : 1;
+        stack.addProperty("count", Math.max(1, Math.min(99, count)));
+        return stack;
+    }
+
+    /**
+     * A plugin's stack as the game writes it. On Paper that is the server's own
+     * codec, every component; on Spigot, which has no way to reach it, the id,
+     * the count and what Bukkit's meta can say.
+     */
+    static JsonObject stackJson(ItemStack stack) {
+        JsonObject full = DialogPackets.itemJson(stack);
+        if (full != null && full.has("id")) return full;
+        JsonObject out = new JsonObject();
+        out.addProperty("id", stack.getType().getKey().toString());
+        out.addProperty("count", stack.getAmount());
+        ItemMeta meta = stack.getItemMeta();
+        if (meta == null) return out;
+        JsonObject components = new JsonObject();
+        if (meta.hasDisplayName()) components.add("minecraft:custom_name", legacy(meta.getDisplayName()));
+        List<String> lore = meta.hasLore() ? meta.getLore() : null;
+        if (lore != null && !lore.isEmpty()) {
+            JsonArray lines = new JsonArray();
+            for (String line : lore) lines.add(legacy(line));
+            components.add("minecraft:lore", lines);
+        }
+        if (meta.hasEnchants()) components.addProperty("minecraft:enchantment_glint_override", true);
+        try {
+            if (meta.hasCustomModelData()) {
+                JsonObject data = new JsonObject();
+                JsonArray floats = new JsonArray();
+                floats.add((float) meta.getCustomModelData());
+                data.add("floats", floats);
+                components.add("minecraft:custom_model_data", data);
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // An API without it: nothing to say.
+        }
+        try {
+            // 1.21.4's item model, reached by name so an older API still loads this class.
+            if (Boolean.TRUE.equals(meta.getClass().getMethod("hasItemModel").invoke(meta))) {
+                Object model = meta.getClass().getMethod("getItemModel").invoke(meta);
+                if (model != null) components.addProperty("minecraft:item_model", model.toString());
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            // Older than item models.
+        }
+        if (meta instanceof SkullMeta skull) {
+            OfflinePlayer owner = skull.getOwningPlayer();
+            JsonObject profile = owner == null || owner.getName() == null ? null : profile(owner.getName());
+            if (profile != null) components.add("minecraft:profile", profile);
+        }
+        if (!components.isEmpty()) out.add("components", components);
+        return out;
+    }
+
+    /** Words in the legacy colour codes plugins name items with: the client still reads a § inside a text. */
+    private static JsonObject legacy(String text) {
+        JsonObject out = new JsonObject();
+        out.addProperty("text", text == null ? "" : text);
+        return out;
+    }
+
+    /** The components the entry itself writes: its name, lore, model, custom model data and glint. */
+    private static void written(BodyDef b, Scope s, JsonObject components) {
         if (b.name() != null) {
             components.add("minecraft:custom_name", Text.json(Text.component(b.name(), s).decoration(TextDecoration.ITALIC, false)));
         }
@@ -292,12 +414,6 @@ public final class Renderer {
         JsonObject modelData = b.modelData().json(v -> Text.fill(v, s, Text.Mode.RAW));
         if (modelData != null) components.add("minecraft:custom_model_data", modelData);
         if (b.glow()) components.addProperty("minecraft:enchantment_glint_override", true);
-        if (b.head() != null && material == Material.PLAYER_HEAD) {
-            JsonObject profile = profile(Text.fill(b.head(), s, Text.Mode.RAW).trim());
-            if (profile != null) components.add("minecraft:profile", profile);
-        }
-        if (!components.isEmpty()) stack.add("components", components);
-        return stack;
     }
 
     /**

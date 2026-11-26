@@ -5,6 +5,7 @@ import ai.resourcepack.dialogs.api.ActionHandler;
 import ai.resourcepack.dialogs.api.DialogContext;
 import ai.resourcepack.dialogs.api.DialogEngineAPI;
 import ai.resourcepack.dialogs.api.DialogInfo;
+import ai.resourcepack.dialogs.api.ItemProvider;
 import ai.resourcepack.dialogs.api.ListProvider;
 import ai.resourcepack.dialogs.api.PlaceholderResolver;
 import ai.resourcepack.dialogs.api.event.DialogClickEvent;
@@ -82,6 +83,8 @@ public final class Engine implements DialogEngineAPI {
     private final Map<String, Owned<ActionHandler>> customActions = new ConcurrentHashMap<>();
     private final List<Owned<Map.Entry<String, PlaceholderResolver>>> resolvers = new ArrayList<>();
     private final Map<String, Owned<ListProvider>> lists = new ConcurrentHashMap<>();
+    /** The items {@code item: api.<name>} shows, by name. */
+    private final Map<String, Owned<ItemProvider>> items = new ConcurrentHashMap<>();
     /** Whose each registered slot container is, by its name, so a plugin's go when it disables. */
     private final Map<String, Plugin> containerOwners = new ConcurrentHashMap<>();
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
@@ -890,6 +893,27 @@ public final class Engine implements DialogEngineAPI {
         return List.of();
     }
 
+    /** Whether a plugin has registered an item under this name. */
+    public boolean hasItem(String name) {
+        return items.containsKey(name);
+    }
+
+    /**
+     * The item a plugin hands over for {@code item: api.<name>}, or null to
+     * leave the entry out: when the provider answers null, or throws.
+     */
+    public org.bukkit.inventory.ItemStack providedItem(String name, String argument, Scope scope) {
+        Owned<ItemProvider> provider = items.get(name);
+        if (provider == null) return null;
+        try {
+            org.bukkit.inventory.ItemStack stack = provider.value().item(scope.viewer, scope, argument);
+            return stack == null || stack.getType().isAir() ? null : stack.clone();
+        } catch (RuntimeException e) {
+            warnOnce("Item " + name + " from " + provider.owner().getName() + " threw " + e);
+            return null;
+        }
+    }
+
     public ActionHandler customAction(String tag) {
         Owned<ActionHandler> h = customActions.get(tag);
         return h == null ? null : h.value();
@@ -1023,6 +1047,13 @@ public final class Engine implements DialogEngineAPI {
     }
 
     @Override
+    public boolean registerItem(Plugin owner, String name, ItemProvider provider) {
+        if (owner == null || provider == null || !Renderer.isItemName(name)) return false;
+        items.put(name, new Owned<>(owner, provider));
+        return true;
+    }
+
+    @Override
     public boolean set(Player player, String key, String value) {
         Session s = player == null || key == null ? null : sessions.get(player.getUniqueId());
         if (s == null) return false;
@@ -1070,6 +1101,7 @@ public final class Engine implements DialogEngineAPI {
                 | codeDialogs.values().removeIf(c -> c.owner() == owner);
         customActions.values().removeIf(o -> o.owner() == owner);
         lists.values().removeIf(o -> o.owner() == owner);
+        items.values().removeIf(o -> o.owner() == owner);
         containerOwners.entrySet().removeIf(owned -> {
             if (owned.getValue() != owner) return false;
             drawn.container(owned.getKey(), null);

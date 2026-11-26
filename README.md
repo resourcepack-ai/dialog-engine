@@ -388,6 +388,16 @@ dialogs.registerList(this, "myplugin_quests", (viewer, ctx) -> quests.of(viewer)
 A dialog built in code is a `ConfigurationSection` in the same format:
 `registerDialog(plugin, "myplugin:x", section)`.
 
+A body item can be an item stack your plugin makes (a custom item, a textured
+head) rather than an id: register a name, and write `item: api.<name>`, or
+`api.<name>:<argument>` to be handed an argument with its placeholders filled.
+The entry's own `name:`, `lore:`, `amount:`, `model:`, `custom-model-data:`
+and `glow:` are put over it; null leaves the entry out.
+
+```java
+dialogs.registerItem(this, "shop", (viewer, ctx, id) -> shop.icon(id));   // item: "api.shop:{row.id}"
+```
+
 ### Shipping drawn dialogs
 
 A plugin can ship dialogs drawn in the browser editor inside its jar: put each

@@ -381,7 +381,8 @@ public final class Loader {
                     b.getStringList("lore"),
                     b.getString("model"),
                     modelData(b),
-                    Math.max(1, Math.min(99, b.getInt("amount", 1))),
+                    // 0 when not written: a plugin's item then keeps its own count.
+                    b.contains("amount") ? Math.max(1, Math.min(99, b.getInt("amount", 1))) : 0,
                     b.getBoolean("glow", false),
                     b.getBoolean("tooltip", true),
                     b.getBoolean("decorations", true),

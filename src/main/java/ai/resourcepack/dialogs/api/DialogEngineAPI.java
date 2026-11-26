@@ -17,7 +17,8 @@ import java.util.Set;
  * {@code namespace:name}. A plugin ships its own by handing the engine a
  * folder with {@link #registerFolder}; it extends what those dialogs can do
  * with its own {@link #registerAction actions}, {@link #registerPlaceholders
- * placeholders} and {@link #registerList lists}; and it hears what players do
+ * placeholders}, {@link #registerList lists} and {@link #registerItem items};
+ * and it hears what players do
  * through {@link ai.resourcepack.dialogs.api.event.DialogClickEvent} and
  * {@link ai.resourcepack.dialogs.api.event.DialogOpenEvent}.
  *
@@ -130,6 +131,19 @@ public interface DialogEngineAPI {
      * @return false when the name is not one a container can have
      */
     boolean registerContainer(Plugin owner, String name, DialogContainer container);
+
+    /**
+     * Registers the item a YAML dialog's body shows with
+     * {@code item: api.<name>} (or {@code api.<name>:<argument>}): the dialog's
+     * icon, drawn from an item stack your plugin makes rather than from an id.
+     * See {@link ItemProvider}. Registering a name again replaces it; yours are
+     * dropped when your plugin disables. Nothing is drawn again: call
+     * {@link #refresh} for a player already looking at the dialog.
+     *
+     * @param name lower-case letters, digits and {@code _}
+     * @return false when the name is not one an item can have
+     */
+    boolean registerItem(Plugin owner, String name, ItemProvider provider);
 
     /** Registers one dialog from a configuration section (handy for dialogs built in code). Replaced on reload only if registered again. */
     void registerDialog(Plugin owner, String dialogId, ConfigurationSection definition);
